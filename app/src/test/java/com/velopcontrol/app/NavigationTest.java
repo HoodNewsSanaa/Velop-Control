@@ -38,6 +38,17 @@ public class NavigationTest {
         click("Settings");assertNotNull(find(root(),"Wi-Fi networks"));click("Open");assertNotNull(find(root(),"Wi-Fi name"));click("‹ Back");
         click("Tools");assertNotNull(find(root(),"Run sequential validation"));click("Run sequential validation");AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();assertNotNull(dialog);assertTrue(dialog.isShowing());assertNotNull(find(dialog.getWindow().getDecorView(),"Connect to your mesh"));dialog.dismiss();screenshot("tools-phone");
     }
+    @Test public void onboardingDemoShowsPreparationWithoutNetworkAccess() throws Exception {
+        click("Explore demo");click("Nodes");click("Add mesh nodes…");assertNotNull(find(root(),"Connect to your primary Velop to start setup. Demo sends no requests."));screenshot("onboarding-phone");
+    }
+    @Test public void onboardingOptionsUsePrimaryAndExposeInterruptedCleanup() throws Exception {
+        click("Explore demo");Topology sample=Topology.demo();sample.demo=false;
+        org.robolectric.util.ReflectionHelpers.setField(activity,"topology",sample);
+        org.robolectric.util.ReflectionHelpers.setField(activity,"primary",new JnapClient("192.168.1.1",new char[]{'x'},new byte[32]));
+        click("Nodes");click("Add mesh nodes…");assertNotNull(find(root(),"Add a wireless node…"));assertNotNull(find(root(),"Add a wired node…"));screenshot("onboarding-ready-phone");
+        activity.getSharedPreferences("preferences",0).edit().putString("onboardingPending:192.168.1.1","pending").commit();
+        click("‹ Back");click("Open mesh setup");assertNotNull(find(root(),"End setup window / finish cleanup"));assertNull(find(root(),"Add a wireless node…"));screenshot("onboarding-interrupted-phone");
+    }
     private View findHint(View view,String text){if(view instanceof EditText&&text.contentEquals(((EditText)view).getHint()))return view;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){View found=findHint(group.getChildAt(i),text);if(found!=null)return found;}}return null;}
     @Test @Config(qualifiers="w900dp-h650dp-land-xhdpi") public void tabletNavigationAndAppearanceCanChange() throws Exception {
         click("Explore demo");screenshot("overview-tablet");click("Tools");Switch appearance=(Switch)find(root(),"Dark appearance");assertNotNull(appearance);appearance.setChecked(false);assertFalse(activity.getSharedPreferences("preferences",0).getBoolean("dark",true));screenshot("tools-tablet-light");click("Settings");assertNotNull(find(root(),"Internet & bridge mode"));

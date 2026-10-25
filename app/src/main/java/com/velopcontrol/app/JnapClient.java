@@ -87,6 +87,10 @@ public final class JnapClient implements AutoCloseable, SettingsRepository.Trans
         return request(action,body,true);
     }
     public String host(){return host;}
+    public JSONObject onboardingRequest(String action,JSONObject body) throws Exception {
+        NodeOnboarding.validate(action,body);
+        return request(action,body,!ReadPolicy.INFO.equals(action));
+    }
     synchronized char[] passwordCopy(){if(password==null)throw new IllegalStateException("Disconnected");return password.clone();}
     public JSONObject authenticate(JSONObject identity) throws Exception {
         boolean modern=false;org.json.JSONArray services=identity.optJSONArray("services");

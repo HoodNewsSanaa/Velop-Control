@@ -1,14 +1,12 @@
-Velop Control 0.4.0 — reliability and monitoring review
+Velop Control 0.5.0 — add mesh nodes
 
-- Show 5 GHz high/low band and channel clearly, without duplicate raw radio IDs.
-- Add node uptime and direct status refresh, plus snapshot timestamps and cached-data notices.
-- Track one-shot restart requests while open; distinguish acceptance, unreachable/returned, confirmed newer boot time and unconfirmed outcomes. Refresh the mesh after recovery; never repeat a reboot automatically.
-- Stop further authenticated requests after credential rejection until reconnection. Add reconnect/replace-password access.
-- Use the appropriate firmware password policy and action. An accepted password change requires reconnection before the new credential is saved.
-- Add experimental read-only LLDP wired-neighbor inspection for directly connected wired nodes. No manual cable map or unverified topology override.
-- Avoid conflicting AP metrics, invalid RSSI/rates, repeated parsing/sorting, stale history results and loss of network refreshes when history fails.
-- Tighten exact GitHub release asset matching and keep update completion from changing the screen after navigation.
+- Add wired nodes through stock automatic Ethernet onboarding.
+- Add wireless nodes using the primary router’s Bluetooth radio; the Android device stays on mesh Wi-Fi.
+- Read current primary mode, firmware support, onboarding flags and member inventory before confirmation, then recheck before sending.
+- Send setup once and monitor for a new connected Slave member. Existing/offline members and ordinary clients do not count as new nodes.
+- Restore flags enabled by this app after a new member is confirmed, five minutes while the app is open, or explicit End setup. Previously enabled settings stay enabled.
+- Persist cleanup information before changes; interrupted sessions show a cleanup reminder after reconnecting. Cleanup checks the original primary identity and never removes joined nodes.
 
-Signed with the same permanent distribution key as 0.3.0: install over that version to retain local settings. The old 0.2.0 prototype requires a one-time uninstall because its temporary signing key was not retained.
+86 automated tests pass; Android lint reports 0 errors. Signed with the same permanent certificate as 0.3.0 and 0.4.0 for in-place updates.
 
-Preview limitations: stock firmware is preserved. Exact physical wired paths, manual parent locking and complete official-app parity are not promised. New monitoring and LLDP paths have automated coverage but remain pending live hardware validation. Router credentials stay local; GitHub is used only for app updates.
+Hardware validation is pending. Automatic onboarding may add multiple eligible unconfigured nodes; power only the intended node nearby. Disabling the Bluetooth onboarding flag does not guarantee cancellation of firmware work already underway. Keep the app open during setup; if Android closes it, reconnect and finish cleanup. Node removal, factory reset and manual parent locking are not included.

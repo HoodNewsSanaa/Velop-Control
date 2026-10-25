@@ -33,6 +33,12 @@ public final class ControlActivity extends Activity {
         final Map<String,JSONObject> raw;final Topology topology;final long uptime;final boolean historyFailed;
         MeshRead(Map<String,JSONObject> raw,Topology topology,long uptime,boolean historyFailed){this.raw=raw;this.topology=topology;this.uptime=uptime;this.historyFailed=historyFailed;}
     }
+    private NodeOnboarding onboarding;
+    private JnapClient onboardingSession;
+    private long onboardingStarted;
+    private boolean showingOnboarding,onboardingChecking,onboardingPaused;
+    private String onboardingMessage="";
+    private final Runnable onboardingPoll=this::checkOnboarding;
     private RestartMonitor restart;
     private JnapClient restartSession;
     private boolean restartChecking,showingUpdates;
@@ -48,7 +54,7 @@ public final class ControlActivity extends Activity {
     private volatile int generation;private AuditReport audit;private String exportText;
     private Runnable back;
     private static final String[] TABS={"Overview","Nodes","Devices","Settings","Tools"};
-    private final Runnable poll=()->{if(auto&&resumed&&!busy&&primary!=null&&back==null&&!restartActive())refresh();else schedule();};
+    private final Runnable poll=()->{if(auto&&resumed&&!busy&&primary!=null&&back==null&&!restartActive()&&onboarding==null)refresh();else schedule();};
     @Override public void onCreate(Bundle state){
         super.onCreate(state);getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         preferences=getSharedPreferences("preferences",MODE_PRIVATE);ui=new Ui(this,preferences.getBoolean("dark",true));history=new HistoryStore(this);vault=new CredentialVault(this);
@@ -57,7 +63,7 @@ public final class ControlActivity extends Activity {
         if(preferences.getBoolean("updateChecks",true)&&System.currentTimeMillis()-preferences.getLong("lastUpdateCheck",0)>8L*3600000)checkUpdates(false);
     }
     private void chrome(String title,boolean navigation){
-        showingUpdates=false;
+        showingUpdates=false;showingOnboarding=false;
         ui=new Ui(this,preferences.getBoolean("dark",true));frame=ui.column();frame.setBackgroundColor(ui.bg);setContentView(frame);
         frame.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
         getWindow().setStatusBarColor(ui.bg);getWindow().setNavigationBarColor(ui.surface);
@@ -159,7 +165,7 @@ public final class ControlActivity extends Activity {
         if(topology==null){if(primary!=null){chrome(tab,true);ui.note(page,"Read the mesh inventory to populate this view.");ui.action(page,"Read mesh",true,this::refresh);}else login("");return;}
         chrome(tab,true);if(!notice.isEmpty())ui.note(page,notice);
         if(!topology.demo)ui.text(page,"Snapshot read "+DateFormat.getDateTimeInstance(DateFormat.MEDIUM,DateFormat.SHORT).format(new Date(topology.observedAt)),12,ui.muted);
-        restartCard();
+        restartCard();onboardingCard();
         switch(tab){case "Overview":overview();break;case "Nodes":nodes();break;case "Devices":devices();break;case "Settings":settings();break;default:tools();}
     }
     private void overview(){
@@ -175,6 +181,7 @@ public final class ControlActivity extends Activity {
         ui.note(page,"Connection counts and signals are firmware snapshots. Missing values stay unknown; wireless throughput is a past child-to-parent test, not an internet speed test.");
     }
     private void nodes(){
+        ui.action(page,"Add mesh nodes…",true,this::onboardingScreen);
         ui.text(page,"Tap a node for its parent, firmware and attached devices.",14,ui.muted);List<View> cards=new ArrayList<>();
         for(Topology.Node n:topology.nodes){LinearLayout card=ui.card();ui.text(card,n.primary?"PRIMARY MESH NODE":"MESH NODE",11,ui.accent);ui.heading(card,n.name);ui.text(card,Ui.known(n.ip)+" · "+Ui.known(n.model),14,ui.text);
             ui.text(card,(n.seen?"Reported in snapshot":"Status not reported")+" · "+(n.primary?"Mesh coordinator":Ui.known(n.link)),13,ui.muted);
@@ -224,7 +231,7 @@ public final class ControlActivity extends Activity {
         EditText search=ui.input("Find a setting","",false);page.addView(search);LinearLayout list=ui.column();page.addView(list);
         Runnable fill=()->{list.removeAllViews();String q=search.getText().toString().toLowerCase(Locale.ROOT),group="";
             for(SettingsCatalog.Spec spec:SettingsCatalog.ALL){if(!(spec.title+" "+spec.group+" "+spec.note).toLowerCase(Locale.ROOT).contains(q))continue;if(!spec.group.equals(group)){group=spec.group;ui.heading(list,group);}
-                LinearLayout card=ui.card();ui.text(card,spec.title,16,ui.text);String state=pageStatus.get(selectedHost+":"+spec.id);ui.text(card,spec.read.isEmpty()?"Unavailable on confirmed stock interfaces":state!=null?state:spec.editable()?"Supported protocol · Read to validate":"Read-only information",12,ui.muted);
+                LinearLayout card=ui.card();ui.text(card,spec.title,16,ui.text);String state=pageStatus.get(selectedHost+":"+spec.id);ui.text(card,spec.id.equals("onboarding")?"Wired and wireless setup wizard":spec.read.isEmpty()?"Unavailable on confirmed stock interfaces":state!=null?state:spec.editable()?"Supported protocol · Read to validate":"Read-only information",12,ui.muted);
                 if(spec.routerOnly&&(bridge||!bridgeKnown))ui.text(card,bridge?"Managed by your main router in bridge mode":"Routing mode unconfirmed · View only",12,ui.warning);ui.action(card,spec.read.isEmpty()?"Details":"Open",false,()->openSettings(spec));list.addView(card);
             }
         };fill.run();search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int a,int c,int f){}public void afterTextChanged(Editable e){}public void onTextChanged(CharSequence s,int a,int b,int c){fill.run();}});
@@ -237,7 +244,7 @@ public final class ControlActivity extends Activity {
         selector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> p){}public void onItemSelected(AdapterView<?> p,View v,int i,long id){if(i<hosts.size()&&!selectedHost.equals(hosts.get(i))){selectedHost=hosts.get(i);pageStatus.clear();showTab();}}});ui.text(card,"To add another target, open Nodes and connect directly to that node.",12,ui.muted);page.addView(card);
     }
     private void openSettings(SettingsCatalog.Spec spec){
-        if(spec.read.isEmpty()){message(spec.title,spec.note);return;}if(topology.demo){demoSettings(spec);return;}
+        if(spec.id.equals("onboarding")){onboardingScreen();return;}if(spec.read.isEmpty()){message(spec.title,spec.note);return;}if(topology.demo){demoSettings(spec);return;}
         JnapClient session=selected();if(session==null){message("Connect first","Select a connected node or connect directly from Nodes.");return;}
         task("Reading "+spec.title.toLowerCase(Locale.ROOT)+"…",()->new SettingsRepository(session).load(spec),snapshot->{pageStatus.put(session.host()+":"+spec.id,"Read validated · Writes untested");edit(snapshot,session);});
     }
@@ -267,8 +274,77 @@ public final class ControlActivity extends Activity {
         ui.action(app,"View connection history",false,()->showHistory(null));ui.action(app,"Clear local history",false,()->ui.dialog("Clear connection history?").setNegativeButton("Keep",null).setPositiveButton("Clear",(d,w)->task("Clearing local history…",()->{history.clear();return true;},r->toast("Local history cleared"))).show());Switch remembered=ui.toggle("Remember passwords on this device",preferences.getBoolean("remember",true));app.addView(remembered);remembered.setOnCheckedChangeListener((button,on)->{preferences.edit().putBoolean("remember",on).apply();if(!on)vault.forgetAll();});
         ui.action(app,"Forget saved passwords",false,()->ui.dialog("Forget saved passwords?").setMessage("Current sessions stay connected. You will need the passwords on your next connection.").setNegativeButton("Keep",null).setPositiveButton("Forget",(d,w)->{vault.forgetAll();toast("Saved passwords removed");}).show());
         ui.action(app,"App updates",false,this::updates);page.addView(app);
-        LinearLayout diagnostics=ui.card();ui.heading(diagnostics,"Network tools");ui.action(diagnostics,"Ping from selected router",false,this::ping);ui.action(diagnostics,"Optimize wireless channels…",false,this::optimize);ui.action(diagnostics,"Change local admin password…",false,this::changePassword);ui.action(diagnostics,"API capability results",false,this::capabilities);page.addView(diagnostics);
-        LinearLayout about=ui.card();ui.heading(about,"Velop Control "+BuildConfig.VERSION_NAME);ui.text(about,"Independent Android client for stock Linksys mesh routers. Local JNAP over pinned HTTPS. GitHub is contacted only for app updates. No advertisements, WebView or separate backend.",14,ui.muted);ui.text(about,"Read support is firmware-dependent. Manual parent locking, node onboarding, full backup/restore and cloud subscription features are unavailable in this build.",13,ui.muted);ui.action(about,"Disconnect",false,()->{disconnect();login("");});page.addView(about);
+        LinearLayout diagnostics=ui.card();ui.heading(diagnostics,"Network tools");ui.action(diagnostics,"Add mesh nodes…",false,this::onboardingScreen);ui.action(diagnostics,"Ping from selected router",false,this::ping);ui.action(diagnostics,"Optimize wireless channels…",false,this::optimize);ui.action(diagnostics,"Change local admin password…",false,this::changePassword);ui.action(diagnostics,"API capability results",false,this::capabilities);page.addView(diagnostics);
+        LinearLayout about=ui.card();ui.heading(about,"Velop Control "+BuildConfig.VERSION_NAME);ui.text(about,"Independent Android client for stock Linksys mesh routers. Local JNAP over pinned HTTPS. GitHub is contacted only for app updates. No advertisements, WebView or separate backend.",14,ui.muted);ui.text(about,"Read support is firmware-dependent. Manual parent locking, node removal, full backup/restore and cloud subscription features are unavailable in this build.",13,ui.muted);ui.action(about,"Disconnect",false,()->{disconnect();login("");});page.addView(about);
+    }
+    private String onboardingKey(JnapClient session){return "onboardingPending:"+session.host();}
+    private NodeOnboarding.Journal onboardingJournal(JnapClient session){
+        final String key=onboardingKey(session);
+        return value->{boolean saved=value.isEmpty()?preferences.edit().remove(key).commit():preferences.edit().putString(key,value).commit();if(!saved)throw new IllegalStateException("Setup recovery information could not be saved. Check setup status before continuing.");};
+    }
+    private boolean onboardingPending(){return primary!=null&&!preferences.getString(onboardingKey(primary),"").isEmpty();}
+    private void onboardingCard(){
+        if(onboarding==null&&!onboardingPending())return;
+        LinearLayout card=ui.card();ui.heading(card,"Mesh setup needs attention");ui.text(card,onboardingMessage.isEmpty()?"A previous setup window may still be enabled on the primary. Open setup to check and finish cleanup.":onboardingMessage,14,ui.warning);ui.action(card,"Open mesh setup",false,this::onboardingScreen);page.addView(card);
+    }
+    private void onboardingScreen(){
+        detail("Add mesh nodes",this::showTab);showingOnboarding=true;
+        ui.note(page,"Connect an unconfigured compatible Linksys node to power near the primary. Wait for its setup-ready light, usually solid purple. Leave configured nodes alone. The app uses stock local setup; it does not reset routers.");
+        if(primary==null||topology==null||topology.demo){ui.note(page,"Connect to your primary Velop to start setup. Demo sends no requests.");return;}
+        ui.text(page,"Primary target: "+primary.host(),13,ui.accent);
+        if(!onboardingMessage.isEmpty())ui.note(page,onboardingMessage);
+        if(onboarding!=null||onboardingPending()){
+            ui.text(page,"Keep this app open during setup. After five minutes it ends monitoring and restores any onboarding flag it enabled. If Android closes the app, reopen this page and finish cleanup. Bluetooth work already underway may still finish after the flag is disabled.",14,ui.muted);
+            ui.action(page,"Check setup status",false,()->{if(onboarding!=null){onboardingPaused=false;checkOnboarding();}else message("Setup interrupted","The previous app session ended. Finish cleanup below, refresh the mesh, then review its nodes before starting another window.");});
+            ui.action(page,"End setup window / finish cleanup",true,this::stopOnboarding);return;
+        }
+        ui.text(page,"Wireless setup uses the primary router’s Bluetooth radio. Your phone stays on the current mesh Wi-Fi; no phone Bluetooth permission or internet connection is needed. Have only the intended unconfigured node powered nearby: automatic setup may enroll more than one eligible node.",14,ui.muted);
+        ui.text(page,"For wired setup, connect the new node’s Internet/WAN port to a LAN port on an existing mesh node. Keep the cable connected throughout setup. Compatibility and wireless backhaul after moving the node depend on its stock firmware.",14,ui.muted);
+        if(!management)ui.note(page,"Enable management controls in Tools before starting a setup window.");
+        ui.action(page,"Add a wireless node…",true,()->prepareOnboarding(NodeOnboarding.Kind.WIRELESS));
+        ui.action(page,"Add a wired node…",false,()->prepareOnboarding(NodeOnboarding.Kind.WIRED));
+        ui.action(page,"View nodes and refresh",false,()->{back=null;tab="Nodes";showTab();refresh();});
+    }
+    private void prepareOnboarding(NodeOnboarding.Kind kind){
+        if(primary==null||topology==null||topology.demo)return;
+        if(!management){message("Controls disabled","Enable management controls in Tools first.");return;}
+        if(onboarding!=null||onboardingPending()||restartActive()){message("Finish the current operation","End any setup window and finish restart monitoring before adding nodes.");return;}
+        JnapClient session=primary;
+        task("Checking primary setup support and current mesh…",()->NodeOnboarding.inspect(session::onboardingRequest,kind),snapshot->{
+            if(primary!=session)return;
+            ui.dialog("Start "+(kind==NodeOnboarding.Kind.WIRED?"wired":"wireless")+" mesh setup?")
+                .setMessage("Primary: "+session.host()+"\n\n"+(kind==NodeOnboarding.Kind.WIRED?"Allow compatible unconfigured nodes connected by Ethernet to join this mesh.":"Ask the primary’s Bluetooth radio to find nearby compatible unconfigured nodes and add them to this mesh. Any eligible nearby nodes may join; power only the intended one.")+"\n\n"+(snapshot.enabled?"Automatic onboarding is already enabled. The app will leave that existing setting enabled when monitoring ends.":"The app will temporarily enable automatic onboarding and restore it to disabled after a new connected mesh member appears, after five minutes while open, or when you end the window.")+" Already-started wireless setup may still finish. Setup support is based on firmware analysis and still needs live-device validation.")
+                .setNegativeButton("Cancel",null).setPositiveButton("Start setup",(d,w)->{
+                    if(!management||primary!=session||busy||onboarding!=null||onboardingPending())return;
+                    NodeOnboarding flow=new NodeOnboarding(session::onboardingRequest,onboardingJournal(session),snapshot);
+                    task("Starting setup once…",()->{try{flow.start();return "Setup request accepted. Waiting for a new connected mesh member…";}catch(Exception e){if(!flow.attempted())throw e;return "Setup may have started, but its reply was not confirmed. The start command will not be repeated. Check status or finish cleanup. "+safeMessage(e);}},text->{onboarding=flow;onboardingSession=session;onboardingStarted=SystemClock.elapsedRealtime();onboardingPaused=false;onboardingMessage=text;onboardingScreen();scheduleOnboarding();});
+                }).show();
+        });
+    }
+    private void scheduleOnboarding(){main.removeCallbacks(onboardingPoll);if(resumed&&onboarding!=null&&!onboardingChecking&&!onboardingPaused)main.postDelayed(onboardingPoll,5000);}
+    private void checkOnboarding(){
+        if(onboarding==null||onboardingChecking||!resumed)return;
+        if(busy||restartActive()){scheduleOnboarding();return;}
+        if(SystemClock.elapsedRealtime()-onboardingStarted>=NodeOnboarding.WINDOW_MS){onboardingMessage="Five-minute monitoring window ended. No new connected mesh member was confirmed.";stopOnboarding();return;}
+        final NodeOnboarding flow=onboarding;final int ticket=generation;onboardingChecking=true;main.removeCallbacks(onboardingPoll);setBusy(true,"Checking mesh setup progress…");
+        worker.execute(()->{
+            NodeOnboarding.Progress state=null;String error=null;boolean joined=false;
+            try{state=flow.poll();joined=!state.added.isEmpty();if(joined)flow.stop();}catch(Exception e){error=safeMessage(e);}
+            final NodeOnboarding.Progress result=state;final String failure=error;final boolean observed=joined;
+            main.post(()->{if(ticket!=generation||isDestroyed())return;onboardingChecking=false;setBusy(false,"");
+                if(failure!=null){onboardingPaused=true;onboardingMessage=(observed?"A new connected mesh member was reported, but cleanup is still pending. ":"Setup status could not be read. Monitoring paused; check manually or finish cleanup. ")+failure;}
+                else if(observed){onboardingMessage="New connected mesh member reported: "+android.text.TextUtils.join(", ",result.added)+". "+(flow.wasEnabled()?"The previously enabled onboarding setting was retained.":"The temporary onboarding setting is disabled again.")+" Bluetooth setup already underway may still finish. Refresh Nodes to inspect the new member.";onboarding=null;onboardingSession=null;}
+                else onboardingMessage="Waiting for a new connected mesh member. "+(result.radio.isEmpty()?"":("Primary Bluetooth report: "+result.radio+". "))+"Elapsed: "+((SystemClock.elapsedRealtime()-onboardingStarted)/1000)+" seconds. An accepted setup request alone does not confirm joining.";
+                if(showingOnboarding)onboardingScreen();else if(back==null)showTab();
+                if(failure==null)scheduleOnboarding();schedule();
+            });
+        });
+    }
+    private void stopOnboarding(){
+        if(primary==null||busy||onboardingChecking){toast("Wait for the current operation");return;}
+        main.removeCallbacks(onboardingPoll);final JnapClient session=onboardingSession==null?primary:onboardingSession;final NodeOnboarding flow=onboarding;
+        String record=preferences.getString(onboardingKey(session),"");if(flow==null&&record.isEmpty()){onboardingScreen();return;}
+        task("Ending setup and checking temporary settings…",()->{if(flow!=null)flow.stop();else NodeOnboarding.recover(session::onboardingRequest,onboardingJournal(session),record);return true;},ok->{onboarding=null;onboardingSession=null;onboardingMessage="Setup window ended and any temporary onboarding flag was restored. Existing settings were retained. Nodes already added remain members; Bluetooth setup already underway may still finish. Refresh Nodes to check the result.";onboardingScreen();});
     }
     private void validateAll(){
         if(topology.demo||primary==null){message("Connect to your mesh","Validation needs a local router session.");return;}if(busy){toast("Wait for the current operation");return;}
@@ -455,10 +531,10 @@ public final class ControlActivity extends Activity {
     private void message(String title,String text){if(!isFinishing()&&!isDestroyed())ui.dialog(title).setMessage(text).setPositiveButton("OK",null).show();}
     private void toast(String text){Toast.makeText(this,text,Toast.LENGTH_SHORT).show();}
     private void schedule(){main.removeCallbacks(poll);if(auto&&resumed&&primary!=null&&!validating)main.postDelayed(poll,30000);}
-    private void disconnect(){generation++;cancelled=true;validating=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);restart=null;restartSession=null;restartChecking=false;for(JnapClient c:sessions.values())c.close();sessions.clear();primary=null;topology=null;latest.clear();pageStatus.clear();health.clear();selectedHost="";management=false;busy=false;back=null;notice="";nodeFilter="";clientQuery="";scope="All devices";audit=null;exportText=null;}
+    private void disconnect(){generation++;cancelled=true;validating=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);main.removeCallbacks(onboardingPoll);onboarding=null;onboardingSession=null;onboardingChecking=false;onboardingMessage="";restart=null;restartSession=null;restartChecking=false;for(JnapClient c:sessions.values())c.close();sessions.clear();primary=null;topology=null;latest.clear();pageStatus.clear();health.clear();selectedHost="";management=false;busy=false;back=null;notice="";nodeFilter="";clientQuery="";scope="All devices";audit=null;exportText=null;}
     @Override public void onBackPressed(){if(back!=null){Runnable action=back;back=null;action.run();}else if(topology!=null&&!tab.equals("Overview")){tab="Overview";showTab();}else if(topology!=null){ui.dialog("Disconnect from your mesh?").setNegativeButton("Stay",null).setPositiveButton("Disconnect",(d,w)->{disconnect();login("");}).show();}else super.onBackPressed();}
-    @Override public void onConfigurationChanged(Configuration configuration){super.onConfigurationChanged(configuration);if(back==null){if(topology==null)login("");else showTab();}}
-    @Override protected void onResume(){super.onResume();resumed=true;schedule();scheduleRestart();}
-    @Override protected void onPause(){resumed=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);super.onPause();}
+    @Override public void onConfigurationChanged(Configuration configuration){super.onConfigurationChanged(configuration);if(showingOnboarding)onboardingScreen();else if(back==null){if(topology==null)login("");else showTab();}}
+    @Override protected void onResume(){super.onResume();resumed=true;schedule();scheduleRestart();scheduleOnboarding();}
+    @Override protected void onPause(){resumed=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);main.removeCallbacks(onboardingPoll);super.onPause();}
     @Override protected void onDestroy(){disconnect();worker.shutdownNow();updateWorker.shutdownNow();history.close();super.onDestroy();}
 }

@@ -1625,13 +1625,13 @@
   },
   {
     "id": "onboarding",
-    "title": "Add or remove mesh nodes",
+    "title": "Add mesh nodes",
     "group": "Administration",
     "read": "",
     "write": "",
     "fields": [],
     "impact": "Changes apply to the selected router.",
-    "note": "Node onboarding requires a validated multi-step workflow. Use the Linksys app for now."
+    "note": "Local wired and primary-radio Bluetooth setup wizard. Node removal remains unavailable."
   },
   {
     "id": "backup",

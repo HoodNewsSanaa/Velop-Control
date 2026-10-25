@@ -59,7 +59,7 @@ Rename a mesh node, restart a directly connected node, change that node’s loca
 
 ## Boundaries
 
-- No manual parent locking, mesh onboarding/removal or full backup/restore workflow.
+- No manual parent locking, node removal or full backup/restore workflow. Wired and wireless node onboarding use the stock primary auto-onboarding service with a setup wizard; live hardware validation is pending.
 - No Linksys cloud remote login, paid subscription services or cloud push alerts.
 - Dynamic DNS is inspectable; provider-specific account editors are not implemented.
 - Existing QoS application rules are preserved, but only device prioritization rules have an editor.

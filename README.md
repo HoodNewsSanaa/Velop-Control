@@ -1,10 +1,10 @@
-# Velop Control 0.4.0
+# Velop Control 0.5.0
 
 Standalone Android app for stock Linksys Intelligent Mesh routers. Android 8.0+; native phone and tablet layouts; no WebView, Linksys account or separate backend. The first installable build is a development preview, with management controls off by default.
 
 ## Install and first test
 
-Download the APK from [the v0.4.0 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.4.0), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
+Download the APK from [the v0.5.0 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.5.0), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
 
 Next, while on the local Wi-Fi, connect to the **primary Velop’s** address and enter its local admin password. In bridge mode, use the Velop’s assigned address rather than the OpenWrt/OPNsense gateway. Approve the local HTTPS certificate only after checking the address on a trusted network. The app pins its SHA-256 fingerprint. Successful passwords are remembered by default, encrypted on-device with Android Keystore; this can be disabled or cleared in Tools.
 
@@ -27,7 +27,7 @@ See [complete feature coverage](docs/feature-coverage.md) for precise boundaries
 
 Management mode starts disabled and resets on disconnect. Each setting change is projected onto an exact schema, validated, shown for confirmation, checked against a fresh router read, submitted once and read back. Drafts expire after three minutes. A changed router state blocks submission. Passwords are hidden from previews. Optional IP fields are omitted when blank; read-only capability fields never become setter fields. Disruptive changes require typing `APPLY`.
 
-If a write times out, the app cannot tell whether the router applied it. It does not resubmit: reconnect and read current settings first. There is no automatic rollback, because a blind rollback could also disrupt the mesh. Firmware-driven steering and parent choice are never overridden. Manual parent locking, node onboarding and full backup/restore remain unavailable.
+If a write times out, the app cannot tell whether the router applied it. It does not resubmit: reconnect and read current settings first. There is no automatic rollback, because a blind rollback could also disrupt the mesh. Firmware-driven steering and parent choice are never overridden. Manual parent locking, node removal and full backup/restore remain unavailable.
 
 ## Security and local operation
 
@@ -61,7 +61,7 @@ Third-party reference notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICE
 
 Backhaul GHz/radio/channel and matched reported link rates are separate from measured child-to-parent throughput. Report times are shown where provided, wired 1024 placeholders are hidden, and wired parent paths remain unverified. No static manual wiring override is included. Child access uses a firmware-appropriate password-check action and reports lockout/delay explicitly. See [release notes](docs/release-notes.md) and [GitHub publishing setup](docs/github-release-setup.md).
 
-GitHub release checks run on launch at most once per eight hours when enabled. Downloads are explicit, bounded, restricted to GitHub release hosts and verified against GitHub SHA-256 metadata plus this app’s package/version/signing certificate. Android asks the user to confirm installation. The v0.4.0 release is published. Its live GitHub metadata and APK SHA-256 match the updater requirements. Download and installation through the Android app still need live-device verification.
+GitHub release checks run on launch at most once per eight hours when enabled. Downloads are explicit, bounded, restricted to GitHub release hosts and verified against GitHub SHA-256 metadata plus this app’s package/version/signing certificate. Android asks the user to confirm installation. The app uses public GitHub releases with exact APK names and SHA-256 metadata. Download and installation through the Android app still need live-device verification.
 
 
 ## Changes in 0.4.0
@@ -75,3 +75,10 @@ GitHub release checks run on launch at most once per eight hours when enabled. D
 - Updates cannot redirect navigation after the user leaves their page. Failed automatic checks also respect the eight-hour interval; APK metadata must match the exact release tag and filename.
 
 0.4.0 uses the same distribution key as 0.3.0 and can update it in place.
+
+
+## Changes in 0.5.0
+
+Open **Nodes → Add mesh nodes** for wired or wireless onboarding through the primary's stock firmware. Wireless setup uses the primary's Bluetooth radio; Android remains on the existing mesh Wi-Fi. Enable management controls before starting. The app verifies the mesh coordinator and firmware support, previews the change, starts once, and monitors new connected Slave members. It temporarily enables only the requested onboarding flag and restores flags it enabled after confirmation, five minutes while open, or explicit End setup. Flags already enabled remain enabled.
+
+Automatic setup may enroll multiple eligible unconfigured nodes; power only the intended node nearby. Bluetooth work already underway may still finish after its flag is disabled. Keep the app open. If Android closes it, reconnect to the original primary and finish the pending cleanup shown in setup. This never removes joined members or resets routers. Hardware validation remains pending. **86 automated tests pass** and Android lint reports **0 errors**. The permanent signing certificate is unchanged for in-place updates from 0.3.0 and 0.4.0.
