@@ -1,0 +1,58 @@
+name: Signed Android release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag matching app version (for example v0.4.0)'
+        required: true
+        default: 'v0.4.0'
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import os,re
+          from pathlib import Path
+          version=re.search(r"versionName '([^']+)'",Path('app/build.gradle').read_text()).group(1)
+          assert os.environ['RELEASE_TAG']=='v'+version, 'Tag must match versionName'
+          PY
+      - name: Restore private signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.VELOP_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.VELOP_STORE_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          test -n "$STORE_PASSWORD"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/velop-control.p12"
+          chmod 600 "$RUNNER_TEMP/velop-control.p12"
+      - name: Verify and build signed APK
+        env:
+          VELOP_STORE_FILE: ${{ runner.temp }}/velop-control.p12
+          VELOP_STORE_PASSWORD: ${{ secrets.VELOP_STORE_PASSWORD }}
+        run: ./gradlew --no-daemon testDebugUnitTest lintRelease assembleRelease
+      - name: Publish APK and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          apk="Velop-Control-${version}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$apk"
+          sha256sum "$apk" > "${apk}.sha256"
+          gh release create "$RELEASE_TAG" "$apk" "${apk}.sha256" --target "$GITHUB_SHA" --title "Velop Control ${version}" --notes-file docs/release-notes.md --latest
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/velop-control.p12"

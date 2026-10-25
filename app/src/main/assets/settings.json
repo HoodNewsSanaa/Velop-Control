@@ -1,0 +1,1646 @@
+[
+  {
+    "id": "wifi",
+    "title": "Wi-Fi networks",
+    "group": "Wireless",
+    "read": "wirelessap/GetRadioInfo3",
+    "write": "wirelessap/SetRadioSettings3",
+    "fields": [
+      {
+        "path": "radios.*.radioID",
+        "label": "Radio",
+        "type": "identity"
+      },
+      {
+        "path": "radios.*.settings.isEnabled",
+        "label": "Enable radio",
+        "type": "bool"
+      },
+      {
+        "path": "radios.*.settings.ssid",
+        "label": "Wi-Fi name",
+        "type": "ssid"
+      },
+      {
+        "path": "radios.*.settings.broadcastSSID",
+        "label": "Broadcast Wi-Fi name",
+        "type": "bool"
+      },
+      {
+        "path": "radios.*.settings.mode",
+        "label": "Wireless mode",
+        "type": "enum",
+        "dynamic": "mode"
+      },
+      {
+        "path": "radios.*.settings.channelWidth",
+        "label": "Channel width",
+        "type": "enum",
+        "dynamic": "width"
+      },
+      {
+        "path": "radios.*.settings.channel",
+        "label": "Channel",
+        "type": "number",
+        "min": 0,
+        "max": 196,
+        "dynamic": "channel"
+      },
+      {
+        "path": "radios.*.settings.security",
+        "label": "Security",
+        "type": "enum",
+        "dynamic": "security"
+      },
+      {
+        "path": "radios.*.settings.wpaPersonalSettings.passphrase",
+        "label": "Wi-Fi password",
+        "type": "password"
+      },
+      {
+        "path": "radios.*.settings.wpaEnterpriseSettings.radiusServer",
+        "label": "RADIUS server",
+        "type": "ip"
+      },
+      {
+        "path": "radios.*.settings.wpaEnterpriseSettings.radiusPort",
+        "label": "RADIUS port",
+        "type": "number",
+        "min": 1,
+        "max": 65535
+      },
+      {
+        "path": "radios.*.settings.wpaEnterpriseSettings.sharedKey",
+        "label": "RADIUS shared key",
+        "type": "password"
+      },
+      {
+        "path": "radios.*.settings.wepSettings.encryption",
+        "label": "WEP encryption",
+        "type": "identity"
+      },
+      {
+        "path": "radios.*.settings.wepSettings.txKey",
+        "label": "WEP transmit key",
+        "type": "number",
+        "min": 1,
+        "max": 4
+      },
+      {
+        "path": "radios.*.settings.wepSettings.key1",
+        "label": "WEP key 1",
+        "type": "password"
+      },
+      {
+        "path": "radios.*.settings.wepSettings.key2",
+        "label": "WEP key 2",
+        "type": "password"
+      },
+      {
+        "path": "radios.*.settings.wepSettings.key3",
+        "label": "WEP key 3",
+        "type": "password"
+      },
+      {
+        "path": "radios.*.settings.wepSettings.key4",
+        "label": "WEP key 4",
+        "type": "password"
+      },
+      {
+        "path": "isBandSteeringEnabled",
+        "label": "Band steering",
+        "type": "bool"
+      },
+      {
+        "path": "bandSteeringMode",
+        "label": "Band steering mode",
+        "type": "enum",
+        "options": [
+          "Auto",
+          "AllBands",
+          "DualBand"
+        ]
+      }
+    ],
+    "impact": "Wi-Fi devices may disconnect. Keep your current Wi-Fi credentials available.",
+    "required": [
+      "radios"
+    ]
+  },
+  {
+    "id": "guest",
+    "title": "Guest Wi-Fi",
+    "group": "Wireless",
+    "read": "guestnetwork/GetGuestRadioSettings2",
+    "write": "guestnetwork/SetGuestRadioSettings2",
+    "fields": [
+      {
+        "path": "isGuestNetworkEnabled",
+        "label": "Enable guest network",
+        "type": "bool"
+      },
+      {
+        "path": "radios.*.radioID",
+        "label": "Radio",
+        "type": "identity"
+      },
+      {
+        "path": "radios.*.isEnabled",
+        "label": "Enable this guest radio",
+        "type": "bool"
+      },
+      {
+        "path": "radios.*.broadcastGuestSSID",
+        "label": "Broadcast guest name",
+        "type": "bool"
+      },
+      {
+        "path": "radios.*.guestSSID",
+        "label": "Guest Wi-Fi name",
+        "type": "ssid"
+      },
+      {
+        "path": "radios.*.guestWPAPassphrase",
+        "label": "Guest password",
+        "type": "password"
+      },
+      {
+        "path": "radios.*.guestPassword",
+        "label": "Guest password",
+        "type": "password"
+      },
+      {
+        "path": "maxSimultaneousGuests",
+        "label": "Maximum guests",
+        "type": "number",
+        "min": 1,
+        "max": 100
+      }
+    ],
+    "impact": "Guest devices may disconnect. Guest isolation depends on router firmware and network mode.",
+    "required": [
+      "isGuestNetworkEnabled",
+      "radios"
+    ]
+  },
+  {
+    "id": "steering",
+    "title": "Automatic mesh steering",
+    "group": "Wireless",
+    "read": "nodes/topologyoptimization/GetTopologyOptimizationSettings2",
+    "write": "nodes/topologyoptimization/SetTopologyOptimizationSettings2",
+    "fields": [
+      {
+        "path": "isClientSteeringEnabled",
+        "label": "Automatically steer clients",
+        "type": "bool"
+      },
+      {
+        "path": "isNodeSteeringEnabled",
+        "label": "Automatically steer mesh nodes",
+        "type": "bool"
+      }
+    ],
+    "impact": "Changes apply to the selected router.",
+    "required": [
+      "isClientSteeringEnabled",
+      "isNodeSteeringEnabled"
+    ]
+  },
+  {
+    "id": "wps",
+    "title": "WPS",
+    "group": "Wireless",
+    "read": "wirelessap/GetWPSServerSettings",
+    "write": "wirelessap/SetWPSServerSettings",
+    "fields": [
+      {
+        "path": "enabled",
+        "label": "Enable WPS",
+        "type": "bool"
+      }
+    ],
+    "impact": "Changes apply to the selected router.",
+    "required": [
+      "enabled"
+    ]
+  },
+  {
+    "id": "mac",
+    "title": "MAC filtering",
+    "group": "Wireless",
+    "read": "macfilter/GetMACFilterSettings",
+    "write": "macfilter/SetMACFilterSettings",
+    "fields": [
+      {
+        "path": "macFilterMode",
+        "label": "Access policy",
+        "type": "enum",
+        "options": [
+          "Disabled",
+          "Allow",
+          "Deny"
+        ]
+      },
+      {
+        "path": "macAddresses",
+        "label": "MAC addresses, one per line",
+        "type": "maclist"
+      }
+    ],
+    "impact": "An allow list can disconnect devices that are not listed, including this phone.",
+    "required": [
+      "macFilterMode",
+      "macAddresses"
+    ]
+  },
+  {
+    "id": "schedule",
+    "title": "Wireless schedule",
+    "group": "Wireless",
+    "read": "wirelessscheduler/GetWirelessSchedulerSettings",
+    "write": "wirelessscheduler/SetWirelessSchedulerSettings",
+    "fields": [
+      {
+        "path": "isWirelessSchedulerEnabled",
+        "label": "Enable Wi-Fi schedule",
+        "type": "bool"
+      },
+      {
+        "path": "wirelessSchedule.sunday",
+        "label": "Sunday",
+        "type": "schedule"
+      },
+      {
+        "path": "wirelessSchedule.monday",
+        "label": "Monday",
+        "type": "schedule"
+      },
+      {
+        "path": "wirelessSchedule.tuesday",
+        "label": "Tuesday",
+        "type": "schedule"
+      },
+      {
+        "path": "wirelessSchedule.wednesday",
+        "label": "Wednesday",
+        "type": "schedule"
+      },
+      {
+        "path": "wirelessSchedule.thursday",
+        "label": "Thursday",
+        "type": "schedule"
+      },
+      {
+        "path": "wirelessSchedule.friday",
+        "label": "Friday",
+        "type": "schedule"
+      },
+      {
+        "path": "wirelessSchedule.saturday",
+        "label": "Saturday",
+        "type": "schedule"
+      },
+      {
+        "path": "configuredRadios",
+        "label": "Scheduled radios",
+        "type": "radiolist"
+      }
+    ],
+    "impact": "Wi-Fi may turn off during blocked periods.",
+    "required": [
+      "isWirelessSchedulerEnabled"
+    ]
+  },
+  {
+    "id": "dfs",
+    "title": "DFS capability",
+    "group": "Wireless",
+    "read": "wirelessap/GetDFSSettings",
+    "write": "",
+    "fields": [
+      {
+        "path": "isDFSSupported",
+        "label": "DFS supported",
+        "type": "bool"
+      }
+    ],
+    "impact": "Changes apply to the selected router."
+  },
+  {
+    "id": "wan",
+    "title": "Internet & bridge mode",
+    "group": "Network",
+    "read": "router/GetWANSettings5",
+    "write": "router/SetWANSettings4",
+    "fields": [
+      {
+        "path": "wanType",
+        "label": "Connection type",
+        "type": "enum",
+        "options": [
+          "DHCP",
+          "Static",
+          "PPPoE",
+          "PPTP",
+          "L2TP",
+          "Bridge"
+        ]
+      },
+      {
+        "path": "mtu",
+        "label": "MTU (0 = automatic)",
+        "type": "number",
+        "min": 0,
+        "max": 1500
+      },
+      {
+        "path": "staticSettings.ipAddress",
+        "label": "IPv4 address",
+        "type": "ip"
+      },
+      {
+        "path": "staticSettings.networkPrefixLength",
+        "label": "Prefix length",
+        "type": "number",
+        "min": 1,
+        "max": 32
+      },
+      {
+        "path": "staticSettings.gateway",
+        "label": "Gateway",
+        "type": "ip"
+      },
+      {
+        "path": "staticSettings.dnsServer1",
+        "label": "DNS server 1",
+        "type": "ipoptional"
+      },
+      {
+        "path": "staticSettings.dnsServer2",
+        "label": "DNS server 2",
+        "type": "ipoptional"
+      },
+      {
+        "path": "staticSettings.dnsServer3",
+        "label": "DNS server 3",
+        "type": "ipoptional"
+      },
+      {
+        "path": "bridgeSettings.staticSettings.ipAddress",
+        "label": "IPv4 address",
+        "type": "ip"
+      },
+      {
+        "path": "bridgeSettings.staticSettings.networkPrefixLength",
+        "label": "Prefix length",
+        "type": "number",
+        "min": 1,
+        "max": 32
+      },
+      {
+        "path": "bridgeSettings.staticSettings.gateway",
+        "label": "Gateway",
+        "type": "ip"
+      },
+      {
+        "path": "bridgeSettings.staticSettings.dnsServer1",
+        "label": "DNS server 1",
+        "type": "ipoptional"
+      },
+      {
+        "path": "bridgeSettings.staticSettings.dnsServer2",
+        "label": "DNS server 2",
+        "type": "ipoptional"
+      },
+      {
+        "path": "bridgeSettings.staticSettings.dnsServer3",
+        "label": "DNS server 3",
+        "type": "ipoptional"
+      },
+      {
+        "path": "tpSettings.staticSettings.ipAddress",
+        "label": "IPv4 address",
+        "type": "ip"
+      },
+      {
+        "path": "tpSettings.staticSettings.networkPrefixLength",
+        "label": "Prefix length",
+        "type": "number",
+        "min": 1,
+        "max": 32
+      },
+      {
+        "path": "tpSettings.staticSettings.gateway",
+        "label": "Gateway",
+        "type": "ip"
+      },
+      {
+        "path": "tpSettings.staticSettings.dnsServer1",
+        "label": "DNS server 1",
+        "type": "ipoptional"
+      },
+      {
+        "path": "tpSettings.staticSettings.dnsServer2",
+        "label": "DNS server 2",
+        "type": "ipoptional"
+      },
+      {
+        "path": "tpSettings.staticSettings.dnsServer3",
+        "label": "DNS server 3",
+        "type": "ipoptional"
+      },
+      {
+        "path": "pppoeSettings.username",
+        "label": "Username",
+        "type": "text"
+      },
+      {
+        "path": "pppoeSettings.password",
+        "label": "Password",
+        "type": "password"
+      },
+      {
+        "path": "pppoeSettings.behavior",
+        "label": "Connection behavior",
+        "type": "enum",
+        "options": [
+          "KeepAlive",
+          "ConnectOnDemand"
+        ]
+      },
+      {
+        "path": "pppoeSettings.maxIdleMinutes",
+        "label": "Idle timeout (minutes)",
+        "type": "number",
+        "min": 1,
+        "max": 9999
+      },
+      {
+        "path": "pppoeSettings.reconnectAfterSeconds",
+        "label": "Reconnect interval (seconds)",
+        "type": "number",
+        "min": 1,
+        "max": 9999
+      },
+      {
+        "path": "tpSettings.username",
+        "label": "Username",
+        "type": "text"
+      },
+      {
+        "path": "tpSettings.password",
+        "label": "Password",
+        "type": "password"
+      },
+      {
+        "path": "tpSettings.behavior",
+        "label": "Connection behavior",
+        "type": "enum",
+        "options": [
+          "KeepAlive",
+          "ConnectOnDemand"
+        ]
+      },
+      {
+        "path": "tpSettings.maxIdleMinutes",
+        "label": "Idle timeout (minutes)",
+        "type": "number",
+        "min": 1,
+        "max": 9999
+      },
+      {
+        "path": "tpSettings.reconnectAfterSeconds",
+        "label": "Reconnect interval (seconds)",
+        "type": "number",
+        "min": 1,
+        "max": 9999
+      },
+      {
+        "path": "pppoeSettings.serviceName",
+        "label": "Service name",
+        "type": "text"
+      },
+      {
+        "path": "tpSettings.server",
+        "label": "VPN server",
+        "type": "text"
+      },
+      {
+        "path": "tpSettings.useStaticSettings",
+        "label": "Use static VPN address",
+        "type": "bool"
+      },
+      {
+        "path": "bridgeSettings.useStaticSettings",
+        "label": "Use static bridge address",
+        "type": "bool"
+      },
+      {
+        "path": "wanTaggingSettings.isEnabled",
+        "label": "Enable ISP VLAN",
+        "type": "bool"
+      },
+      {
+        "path": "wanTaggingSettings.vlanTaggingSettings.vlanID",
+        "label": "VLAN ID",
+        "type": "number",
+        "min": 1,
+        "max": 4094
+      },
+      {
+        "path": "wanTaggingSettings.vlanTaggingSettings.vlanPriority",
+        "label": "VLAN priority",
+        "type": "number",
+        "min": 0,
+        "max": 7
+      },
+      {
+        "path": "wanTaggingSettings.vlanTaggingSettings.vlanStatus",
+        "label": "VLAN tagging",
+        "type": "enum",
+        "options": [
+          "Tagged",
+          "Untagged"
+        ]
+      }
+    ],
+    "impact": "Internet access or router management may disconnect. Reconnect using the router\u2019s new address if it changes.",
+    "required": [
+      "wanType",
+      "mtu"
+    ],
+    "disruption": true
+  },
+  {
+    "id": "lan",
+    "title": "LAN, DHCP & reservations",
+    "group": "Network",
+    "read": "router/GetLANSettings",
+    "write": "router/SetLANSettings",
+    "fields": [
+      {
+        "path": "ipAddress",
+        "label": "Router LAN address",
+        "type": "ip"
+      },
+      {
+        "path": "networkPrefixLength",
+        "label": "Subnet prefix length",
+        "type": "number",
+        "min": 16,
+        "max": 30
+      },
+      {
+        "path": "hostName",
+        "label": "Router hostname",
+        "type": "hostname"
+      },
+      {
+        "path": "isDHCPEnabled",
+        "label": "Enable DHCP server",
+        "type": "bool"
+      },
+      {
+        "path": "dhcpSettings.leaseMinutes",
+        "label": "Lease duration (minutes)",
+        "type": "number",
+        "min": 1,
+        "max": 525600
+      },
+      {
+        "path": "dhcpSettings.firstClientIPAddress",
+        "label": "DHCP first address",
+        "type": "ip"
+      },
+      {
+        "path": "dhcpSettings.lastClientIPAddress",
+        "label": "DHCP last address",
+        "type": "ip"
+      },
+      {
+        "path": "dhcpSettings.dnsServer1",
+        "label": "DNS server 1",
+        "type": "ipoptional"
+      },
+      {
+        "path": "dhcpSettings.dnsServer2",
+        "label": "DNS server 2",
+        "type": "ipoptional"
+      },
+      {
+        "path": "dhcpSettings.dnsServer3",
+        "label": "DNS server 3",
+        "type": "ipoptional"
+      },
+      {
+        "path": "dhcpSettings.winsServer",
+        "label": "WINS server",
+        "type": "ipoptional"
+      },
+      {
+        "path": "dhcpSettings.reservations.*.macAddress",
+        "label": "Device MAC",
+        "type": "mac"
+      },
+      {
+        "path": "dhcpSettings.reservations.*.ipAddress",
+        "label": "Reserved IP",
+        "type": "ip"
+      },
+      {
+        "path": "dhcpSettings.reservations.*.description",
+        "label": "Reservation name",
+        "type": "text"
+      }
+    ],
+    "impact": "Changing the LAN address or DHCP server may disconnect management. Reservations must match the new subnet.",
+    "required": [
+      "ipAddress",
+      "networkPrefixLength",
+      "hostName",
+      "isDHCPEnabled"
+    ],
+    "arrays": [
+      {
+        "path": "dhcpSettings.reservations",
+        "label": "DHCP reservations",
+        "template": {
+          "macAddress": "",
+          "ipAddress": "",
+          "description": ""
+        },
+        "maxField": ""
+      }
+    ],
+    "routerOnly": true,
+    "disruption": true
+  },
+  {
+    "id": "ipv6",
+    "title": "IPv6",
+    "group": "Network",
+    "read": "router/GetIPv6Settings2",
+    "write": "router/SetIPv6Settings2",
+    "fields": [
+      {
+        "path": "wanType",
+        "label": "IPv6 mode",
+        "type": "enum",
+        "options": [
+          "Automatic",
+          "PPPoE",
+          "Pass-through"
+        ]
+      },
+      {
+        "path": "ipv6AutomaticSettings.isIPv6AutomaticEnabled",
+        "label": "Enable automatic IPv6",
+        "type": "bool"
+      }
+    ],
+    "impact": "IPv6 connections may be interrupted.",
+    "required": [
+      "wanType"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "clone",
+    "title": "WAN MAC cloning",
+    "group": "Network",
+    "read": "router/GetMACAddressCloneSettings",
+    "write": "router/SetMACAddressCloneSettings",
+    "fields": [
+      {
+        "path": "isMACAddressCloneEnabled",
+        "label": "Enable MAC cloning",
+        "type": "bool"
+      },
+      {
+        "path": "macAddress",
+        "label": "Cloned MAC address",
+        "type": "mac"
+      }
+    ],
+    "impact": "The WAN connection may restart.",
+    "required": [
+      "isMACAddressCloneEnabled"
+    ],
+    "routerOnly": true,
+    "disruption": true
+  },
+  {
+    "id": "routing",
+    "title": "NAT & static routes",
+    "group": "Network",
+    "read": "router/GetRoutingSettings",
+    "write": "router/SetRoutingSettings",
+    "fields": [
+      {
+        "path": "isNATEnabled",
+        "label": "Enable NAT",
+        "type": "bool"
+      },
+      {
+        "path": "isDynamicRoutingEnabled",
+        "label": "Enable dynamic routing",
+        "type": "bool"
+      },
+      {
+        "path": "entries.*.name",
+        "label": "Route name",
+        "type": "text"
+      },
+      {
+        "path": "entries.*.settings.destinationLAN",
+        "label": "Destination network",
+        "type": "ip"
+      },
+      {
+        "path": "entries.*.settings.networkPrefixLength",
+        "label": "Destination prefix",
+        "type": "number",
+        "min": 0,
+        "max": 32
+      },
+      {
+        "path": "entries.*.settings.gateway",
+        "label": "Gateway",
+        "type": "ipoptional"
+      },
+      {
+        "path": "entries.*.settings.interface",
+        "label": "Interface",
+        "type": "enum",
+        "options": [
+          "LAN",
+          "WAN"
+        ]
+      }
+    ],
+    "impact": "Routing changes may interrupt internet or local access.",
+    "arrays": [
+      {
+        "path": "entries",
+        "label": "Static routes",
+        "template": {
+          "name": "",
+          "settings": {
+            "destinationLAN": "",
+            "networkPrefixLength": 24,
+            "gateway": "",
+            "interface": "LAN"
+          }
+        },
+        "maxField": "maxStaticRouteEntries"
+      }
+    ],
+    "required": [
+      "isNATEnabled",
+      "isDynamicRoutingEnabled",
+      "entries"
+    ],
+    "routerOnly": true,
+    "disruption": true
+  },
+  {
+    "id": "firewall",
+    "title": "Firewall & VPN passthrough",
+    "group": "Security",
+    "read": "firewall/GetFirewallSettings",
+    "write": "firewall/SetFirewallSettings",
+    "fields": [
+      {
+        "path": "isIPv4FirewallEnabled",
+        "label": "IPv4 firewall",
+        "type": "bool"
+      },
+      {
+        "path": "isIPv6FirewallEnabled",
+        "label": "IPv6 firewall",
+        "type": "bool"
+      },
+      {
+        "path": "blockAnonymousRequests",
+        "label": "Block anonymous internet requests",
+        "type": "bool"
+      },
+      {
+        "path": "blockMulticast",
+        "label": "Filter multicast",
+        "type": "bool"
+      },
+      {
+        "path": "blockNATRedirection",
+        "label": "Filter NAT redirection",
+        "type": "bool"
+      },
+      {
+        "path": "blockIDENT",
+        "label": "Filter IDENT",
+        "type": "bool"
+      },
+      {
+        "path": "blockIPSec",
+        "label": "Block IPSec passthrough",
+        "type": "bool"
+      },
+      {
+        "path": "blockPPTP",
+        "label": "Block PPTP passthrough",
+        "type": "bool"
+      },
+      {
+        "path": "blockL2TP",
+        "label": "Block L2TP passthrough",
+        "type": "bool"
+      }
+    ],
+    "impact": "Changing firewall protection affects devices on your network.",
+    "required": [
+      "isIPv4FirewallEnabled",
+      "isIPv6FirewallEnabled",
+      "blockAnonymousRequests",
+      "blockMulticast",
+      "blockNATRedirection",
+      "blockIDENT",
+      "blockIPSec",
+      "blockPPTP",
+      "blockL2TP"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "alg",
+    "title": "SIP ALG",
+    "group": "Security",
+    "read": "firewall/GetALGSettings",
+    "write": "firewall/SetALGSettings",
+    "fields": [
+      {
+        "path": "isSIPEnabled",
+        "label": "Enable SIP ALG",
+        "type": "bool"
+      }
+    ],
+    "impact": "Changes apply to the selected router.",
+    "required": [
+      "isSIPEnabled"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "dmz",
+    "title": "DMZ",
+    "group": "Security",
+    "read": "firewall/GetDMZSettings",
+    "write": "firewall/SetDMZSettings",
+    "fields": [
+      {
+        "path": "isDMZEnabled",
+        "label": "Enable DMZ",
+        "type": "bool"
+      },
+      {
+        "path": "destinationIPAddress",
+        "label": "Exposed device IP",
+        "type": "ipoptional"
+      },
+      {
+        "path": "destinationMACAddress",
+        "label": "Exposed device MAC",
+        "type": "macoptional"
+      },
+      {
+        "path": "sourceRestriction.firstIPAddress",
+        "label": "First allowed source IP",
+        "type": "ipoptional"
+      },
+      {
+        "path": "sourceRestriction.lastIPAddress",
+        "label": "Last allowed source IP",
+        "type": "ipoptional"
+      }
+    ],
+    "impact": "DMZ exposes the selected device to unsolicited internet traffic.",
+    "required": [
+      "isDMZEnabled"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "forward",
+    "title": "Port forwarding",
+    "group": "Security",
+    "read": "firewall/GetSinglePortForwardingRules",
+    "write": "firewall/SetSinglePortForwardingRules",
+    "fields": [
+      {
+        "path": "rules.*.isEnabled",
+        "label": "Enabled",
+        "type": "bool"
+      },
+      {
+        "path": "rules.*.description",
+        "label": "Rule name",
+        "type": "text"
+      },
+      {
+        "path": "rules.*.protocol",
+        "label": "Protocol",
+        "type": "enum",
+        "options": [
+          "TCP",
+          "UDP",
+          "Both"
+        ]
+      },
+      {
+        "path": "rules.*.internalServerIPAddress",
+        "label": "Device IP",
+        "type": "ip"
+      },
+      {
+        "path": "rules.*.externalPort",
+        "label": "External port",
+        "type": "number",
+        "min": 1,
+        "max": 65535
+      },
+      {
+        "path": "rules.*.internalPort",
+        "label": "Internal port",
+        "type": "number",
+        "min": 1,
+        "max": 65535
+      }
+    ],
+    "impact": "These rules can open internet access to a local device. Check the target address and ports.",
+    "arrays": [
+      {
+        "path": "rules",
+        "label": "Port forwarding",
+        "template": {
+          "isEnabled": true,
+          "description": "",
+          "protocol": "Both",
+          "internalServerIPAddress": "",
+          "externalPort": 1,
+          "internalPort": 1
+        },
+        "maxField": "maxRules"
+      }
+    ],
+    "required": [
+      "rules"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "range",
+    "title": "Port-range forwarding",
+    "group": "Security",
+    "read": "firewall/GetPortRangeForwardingRules",
+    "write": "firewall/SetPortRangeForwardingRules",
+    "fields": [
+      {
+        "path": "rules.*.isEnabled",
+        "label": "Enabled",
+        "type": "bool"
+      },
+      {
+        "path": "rules.*.description",
+        "label": "Rule name",
+        "type": "text"
+      },
+      {
+        "path": "rules.*.protocol",
+        "label": "Protocol",
+        "type": "enum",
+        "options": [
+          "TCP",
+          "UDP",
+          "Both"
+        ]
+      },
+      {
+        "path": "rules.*.internalServerIPAddress",
+        "label": "Device IP",
+        "type": "ip"
+      },
+      {
+        "path": "rules.*.firstExternalPort",
+        "label": "First external port",
+        "type": "number",
+        "min": 1,
+        "max": 65535
+      },
+      {
+        "path": "rules.*.lastExternalPort",
+        "label": "Last external port",
+        "type": "number",
+        "min": 1,
+        "max": 65535
+      }
+    ],
+    "impact": "These rules can open internet access to a local device. Check the target address and ports.",
+    "arrays": [
+      {
+        "path": "rules",
+        "label": "Port-range forwarding",
+        "template": {
+          "isEnabled": true,
+          "description": "",
+          "protocol": "Both",
+          "internalServerIPAddress": "",
+          "firstExternalPort": 1,
+          "lastExternalPort": 1
+        },
+        "maxField": "maxRules"
+      }
+    ],
+    "required": [
+      "rules"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "trigger",
+    "title": "Port triggering",
+    "group": "Security",
+    "read": "firewall/GetPortRangeTriggeringRules",
+    "write": "firewall/SetPortRangeTriggeringRules",
+    "fields": [
+      {
+        "path": "rules.*.isEnabled",
+        "label": "Enabled",
+        "type": "bool"
+      },
+      {
+        "path": "rules.*.description",
+        "label": "Rule name",
+        "type": "text"
+      },
+      {
+        "path": "rules.*.firstTriggerPort",
+        "label": "First trigger port",
+        "type": "number",
+        "min": 1,
+        "max": 65535
+      },
+      {
+        "path": "rules.*.lastTriggerPort",
+        "label": "Last trigger port",
+        "type": "number",
+        "min": 1,
+        "max": 65535
+      },
+      {
+        "path": "rules.*.firstForwardedPort",
+        "label": "First forwarded port",
+        "type": "number",
+        "min": 1,
+        "max": 65535
+      },
+      {
+        "path": "rules.*.lastForwardedPort",
+        "label": "Last forwarded port",
+        "type": "number",
+        "min": 1,
+        "max": 65535
+      }
+    ],
+    "impact": "These rules can open internet access to a local device. Check the target address and ports.",
+    "arrays": [
+      {
+        "path": "rules",
+        "label": "Port triggering",
+        "template": {
+          "isEnabled": true,
+          "description": "",
+          "firstTriggerPort": 1,
+          "lastTriggerPort": 1,
+          "firstForwardedPort": 1,
+          "lastForwardedPort": 1
+        },
+        "maxField": "maxRules"
+      }
+    ],
+    "required": [
+      "rules"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "upnp",
+    "title": "UPnP",
+    "group": "Security",
+    "read": "routerupnp/GetUPnPSettings",
+    "write": "routerupnp/SetUPnPSettings",
+    "fields": [
+      {
+        "path": "isUPnPEnabled",
+        "label": "Enable UPnP",
+        "type": "bool"
+      },
+      {
+        "path": "canUsersConfigure",
+        "label": "Allow applications to configure UPnP",
+        "type": "bool"
+      },
+      {
+        "path": "canUsersDisableWANAccess",
+        "label": "Allow applications to disable WAN access",
+        "type": "bool"
+      }
+    ],
+    "impact": "Changes apply to the selected router.",
+    "required": [
+      "isUPnPEnabled",
+      "canUsersConfigure",
+      "canUsersDisableWANAccess"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "parental",
+    "title": "Parental controls",
+    "group": "Family",
+    "read": "parentalcontrol/GetParentalControlSettings",
+    "write": "parentalcontrol/SetParentalControlSettings",
+    "fields": [
+      {
+        "path": "isParentalControlEnabled",
+        "label": "Enable parental controls",
+        "type": "bool"
+      },
+      {
+        "path": "rules.*.isEnabled",
+        "label": "Enable this rule",
+        "type": "bool"
+      },
+      {
+        "path": "rules.*.description",
+        "label": "Rule name",
+        "type": "text"
+      },
+      {
+        "path": "rules.*.macAddresses",
+        "label": "Devices (MAC addresses)",
+        "type": "maclist"
+      },
+      {
+        "path": "rules.*.blockedURLs",
+        "label": "Blocked sites, one per line",
+        "type": "stringlist"
+      },
+      {
+        "path": "rules.*.wanSchedule.sunday",
+        "label": "Sunday",
+        "type": "schedule"
+      },
+      {
+        "path": "rules.*.wanSchedule.monday",
+        "label": "Monday",
+        "type": "schedule"
+      },
+      {
+        "path": "rules.*.wanSchedule.tuesday",
+        "label": "Tuesday",
+        "type": "schedule"
+      },
+      {
+        "path": "rules.*.wanSchedule.wednesday",
+        "label": "Wednesday",
+        "type": "schedule"
+      },
+      {
+        "path": "rules.*.wanSchedule.thursday",
+        "label": "Thursday",
+        "type": "schedule"
+      },
+      {
+        "path": "rules.*.wanSchedule.friday",
+        "label": "Friday",
+        "type": "schedule"
+      },
+      {
+        "path": "rules.*.wanSchedule.saturday",
+        "label": "Saturday",
+        "type": "schedule"
+      }
+    ],
+    "impact": "Rules can pause internet access for the selected devices.",
+    "arrays": [
+      {
+        "path": "rules",
+        "label": "Parental-control rules",
+        "template": {
+          "isEnabled": true,
+          "description": "",
+          "macAddresses": [],
+          "blockedURLs": [],
+          "wanSchedule": {
+            "sunday": "111111111111111111111111111111111111111111111111",
+            "monday": "111111111111111111111111111111111111111111111111",
+            "tuesday": "111111111111111111111111111111111111111111111111",
+            "wednesday": "111111111111111111111111111111111111111111111111",
+            "thursday": "111111111111111111111111111111111111111111111111",
+            "friday": "111111111111111111111111111111111111111111111111",
+            "saturday": "111111111111111111111111111111111111111111111111"
+          }
+        },
+        "maxField": "maxRules"
+      }
+    ],
+    "required": [
+      "isParentalControlEnabled",
+      "rules"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "qos",
+    "title": "Device prioritization",
+    "group": "Family",
+    "read": "qos/GetQoSSettings",
+    "write": "qos/SetQoSSettings",
+    "fields": [
+      {
+        "path": "isQoSEnabled",
+        "label": "Enable prioritization",
+        "type": "bool"
+      },
+      {
+        "path": "isQoSAutoPrioritizingEnabled",
+        "label": "Automatic prioritization",
+        "type": "bool"
+      },
+      {
+        "path": "upstreamBandwidthbps",
+        "label": "Upload bandwidth (bits/s)",
+        "type": "number",
+        "min": 0,
+        "max": 2147483647
+      },
+      {
+        "path": "downstreamBandwidthbps",
+        "label": "Download bandwidth (bits/s)",
+        "type": "number",
+        "min": 0,
+        "max": 2147483647
+      },
+      {
+        "path": "deviceRules.*.macAddress",
+        "label": "Device MAC",
+        "type": "mac"
+      },
+      {
+        "path": "deviceRules.*.priority",
+        "label": "Priority",
+        "type": "enum",
+        "options": [
+          "High",
+          "Normal",
+          "Low"
+        ]
+      },
+      {
+        "path": "deviceRules.*.description",
+        "label": "Device label",
+        "type": "text"
+      },
+      {
+        "path": "deviceRules.*.trafficType",
+        "label": "Traffic type",
+        "type": "enum",
+        "options": [
+          "Video",
+          "Voice",
+          "BestEffort"
+        ]
+      },
+      {
+        "path": "applicationRules",
+        "label": "Application rules",
+        "type": "preserve"
+      }
+    ],
+    "impact": "Changes apply to the selected router.",
+    "arrays": [
+      {
+        "path": "deviceRules",
+        "label": "Prioritized devices",
+        "template": {
+          "macAddress": "",
+          "priority": "High",
+          "trafficType": "Video",
+          "description": ""
+        },
+        "maxField": "maxDeviceRules"
+      }
+    ],
+    "required": [
+      "isQoSEnabled",
+      "isQoSAutoPrioritizingEnabled",
+      "upstreamBandwidthbps",
+      "downstreamBandwidthbps",
+      "deviceRules",
+      "applicationRules"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "management",
+    "title": "Management access",
+    "group": "Administration",
+    "read": "routermanagement/GetManagementSettings2",
+    "write": "routermanagement/SetManagementSettings2",
+    "fields": [
+      {
+        "path": "canManageUsingHTTP",
+        "label": "Allow HTTP",
+        "type": "bool"
+      },
+      {
+        "path": "canManageUsingHTTPS",
+        "label": "Allow HTTPS",
+        "type": "bool"
+      },
+      {
+        "path": "canManageWirelessly",
+        "label": "Allow wireless management",
+        "type": "bool"
+      },
+      {
+        "path": "canManageRemotely",
+        "label": "Allow remote management",
+        "type": "bool"
+      }
+    ],
+    "impact": "Keep HTTPS enabled so this app can reconnect. Remote management increases exposure.",
+    "required": [
+      "canManageUsingHTTP",
+      "canManageUsingHTTPS",
+      "canManageRemotely"
+    ]
+  },
+  {
+    "id": "time",
+    "title": "Time zone & daylight saving",
+    "group": "Administration",
+    "read": "locale/GetTimeSettings",
+    "write": "locale/SetTimeSettings",
+    "fields": [
+      {
+        "path": "timeZoneID",
+        "label": "Time zone",
+        "type": "enum",
+        "dynamic": "timezone"
+      },
+      {
+        "path": "autoAdjustForDST",
+        "label": "Adjust automatically for daylight saving",
+        "type": "bool"
+      }
+    ],
+    "impact": "Changes apply to the selected router.",
+    "required": [
+      "timeZoneID",
+      "autoAdjustForDST"
+    ]
+  },
+  {
+    "id": "logging",
+    "title": "Router logging",
+    "group": "Administration",
+    "read": "routerlog/GetLogSettings",
+    "write": "routerlog/SetLogSettings",
+    "fields": [
+      {
+        "path": "isLoggingEnabled",
+        "label": "Enable router logging",
+        "type": "bool"
+      }
+    ],
+    "impact": "Changes apply to the selected router.",
+    "required": [
+      "isLoggingEnabled"
+    ]
+  },
+  {
+    "id": "leds",
+    "title": "Ethernet-port LEDs",
+    "group": "Administration",
+    "read": "routerleds/GetRouterLEDSettings",
+    "write": "routerleds/SetRouterLEDSettings",
+    "fields": [
+      {
+        "path": "isSwitchportLEDEnabled",
+        "label": "Enable switch-port LEDs",
+        "type": "bool"
+      }
+    ],
+    "impact": "Changes apply to the selected router.",
+    "required": [
+      "isSwitchportLEDEnabled"
+    ]
+  },
+  {
+    "id": "restart",
+    "title": "Scheduled restart",
+    "group": "Administration",
+    "read": "diagnostics/GetScheduledRebootSettings",
+    "write": "diagnostics/SetScheduledRebootSettings",
+    "fields": [
+      {
+        "path": "isScheduledRebootEnabled",
+        "label": "Enable scheduled restart",
+        "type": "bool"
+      },
+      {
+        "path": "rebootInterval",
+        "label": "Restart interval",
+        "type": "enum",
+        "options": [
+          "Weekly",
+          "Monthly"
+        ]
+      }
+    ],
+    "impact": "Changes apply to the selected router.",
+    "required": [
+      "isScheduledRebootEnabled",
+      "rebootInterval"
+    ]
+  },
+  {
+    "id": "updates",
+    "title": "Automatic firmware updates",
+    "group": "Administration",
+    "read": "firmwareupdate/GetFirmwareUpdateSettings",
+    "write": "firmwareupdate/SetFirmwareUpdateSettings",
+    "fields": [
+      {
+        "path": "updatePolicy",
+        "label": "Update policy",
+        "type": "enum",
+        "options": [
+          "Manual",
+          "AutomaticallyCheckAndInstall"
+        ]
+      },
+      {
+        "path": "autoUpdateWindow.startMinute",
+        "label": "Window start (minute of day)",
+        "type": "number",
+        "min": 0,
+        "max": 1439
+      },
+      {
+        "path": "autoUpdateWindow.durationMinutes",
+        "label": "Window duration (minutes)",
+        "type": "number",
+        "min": 1,
+        "max": 1440
+      }
+    ],
+    "impact": "Automatic updates can install firmware and restart the mesh during the selected window.",
+    "required": [
+      "updatePolicy",
+      "autoUpdateWindow"
+    ]
+  },
+  {
+    "id": "smb",
+    "title": "USB file sharing",
+    "group": "Storage",
+    "read": "nodes/storage/GetSMBServerSettings",
+    "write": "nodes/storage/SetSMBServerSettings",
+    "fields": [
+      {
+        "path": "isAnonymousAccessEnabled",
+        "label": "Allow anonymous access",
+        "type": "bool"
+      },
+      {
+        "path": "username",
+        "label": "Sharing username",
+        "type": "text"
+      },
+      {
+        "path": "password",
+        "label": "Sharing password",
+        "type": "password"
+      }
+    ],
+    "impact": "Anonymous sharing allows network users to access files without a password.",
+    "required": [
+      "isAnonymousAccessEnabled"
+    ]
+  },
+  {
+    "id": "homekit",
+    "title": "HomeKit router support",
+    "group": "Administration",
+    "read": "homekit/GetHomeKitSettings",
+    "write": "homekit/SetHomeKitSettings",
+    "fields": [
+      {
+        "path": "isEnabled",
+        "label": "Enable HomeKit support",
+        "type": "bool"
+      }
+    ],
+    "impact": "Changing this can affect existing Apple Home integration. Enrollment still requires Apple Home.",
+    "required": [
+      "isEnabled"
+    ]
+  },
+  {
+    "id": "storage",
+    "title": "Attached USB storage",
+    "group": "Storage",
+    "read": "nodes/storage/GetNodesPartitions",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
+  },
+  {
+    "id": "leases",
+    "title": "DHCP leases",
+    "group": "Network",
+    "read": "router/GetDHCPClientLeases",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
+  },
+  {
+    "id": "firmware",
+    "title": "Firmware status",
+    "group": "Administration",
+    "read": "nodes/firmwareupdate/GetFirmwareUpdateStatus",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
+  },
+  {
+    "id": "wanstatus",
+    "title": "Internet status",
+    "group": "Network",
+    "read": "router/GetWANStatus3",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
+  },
+  {
+    "id": "ddns",
+    "title": "Dynamic DNS",
+    "group": "Network",
+    "read": "ddns/GetDDNSSettings",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router.",
+    "note": "Provider-specific credential forms are not yet enabled in this build."
+  },
+  {
+    "id": "ddnsstatus",
+    "title": "Dynamic DNS status",
+    "group": "Network",
+    "read": "ddns/GetDDNSStatus2",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
+  },
+  {
+    "id": "manualparent",
+    "title": "Manual parent selection",
+    "group": "Wireless",
+    "read": "",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router.",
+    "note": "No safe stock-firmware control has been verified for this Intelligent Mesh system. Automatic steering remains available."
+  },
+  {
+    "id": "onboarding",
+    "title": "Add or remove mesh nodes",
+    "group": "Administration",
+    "read": "",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router.",
+    "note": "Node onboarding requires a validated multi-step workflow. Use the Linksys app for now."
+  },
+  {
+    "id": "backup",
+    "title": "Full configuration backup & restore",
+    "group": "Administration",
+    "read": "",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router.",
+    "note": "The exact stock CGI backup and restore workflow has not yet been validated."
+  }
+]

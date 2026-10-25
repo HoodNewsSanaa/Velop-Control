@@ -1,0 +1,15 @@
+package com.velopcontrol.app;
+import org.json.*;
+import org.junit.Test;
+import static org.junit.Assert.*;
+
+public class ReleaseInfoTest {
+    private JSONObject release() throws Exception{return new JSONObject().put("tag_name","v0.3.1").put("body","Fixes").put("assets",new JSONArray().put(new JSONObject().put("name","Velop-Control-0.3.1.apk").put("size",250000).put("digest","sha256:"+"a".repeat(64)).put("browser_download_url","https://github.com/HoodNewsSanaa/Velop-Control/releases/download/v0.3.1/Velop-Control-0.3.1.apk")));}
+    @Test public void numericVersionOrdering(){assertTrue(ReleaseInfo.compare("0.10.0","0.3.9")>0);assertEquals(0,ReleaseInfo.compare("1.0.0","1.0.0"));assertThrows(IllegalArgumentException.class,()->ReleaseInfo.compare("v1.0.0","1.0.0"));}
+    @Test public void matchingReleaseHasIntegrityMetadata() throws Exception {ReleaseInfo r=ReleaseInfo.parse(release());assertEquals("0.3.1",r.version);assertEquals(250000,r.size);assertEquals(64,r.digest.length());}
+    @Test public void checksumAndRepositoryAreMandatory() throws Exception {JSONObject root=release();root.getJSONArray("assets").getJSONObject(0).remove("digest");assertThrows(IllegalArgumentException.class,()->ReleaseInfo.parse(root));JSONObject other=release();other.getJSONArray("assets").getJSONObject(0).put("browser_download_url","https://github.com/attacker/Velop-Control/releases/download/v0.3.1/a.apk");assertThrows(IllegalArgumentException.class,()->ReleaseInfo.parse(other));}
+    @Test public void releaseMustHaveExpectedAssetAndBePublished() throws Exception {JSONObject root=release();root.put("prerelease",true);assertThrows(IllegalArgumentException.class,()->ReleaseInfo.parse(root));JSONObject missing=release();missing.put("assets",new JSONArray());assertThrows(IllegalArgumentException.class,()->ReleaseInfo.parse(missing));}
+    @Test public void redirectsCannotEscapePublicGithubHosts(){assertTrue(ReleaseInfo.allowedDownload("https://release-assets.githubusercontent.com/path?signature=x"));for(String s:new String[]{"http://github.com/path","https://github.com.evil.test/path","https://github.com@evil.test/path","https://192.168.1.1/a.apk","file:///tmp/update.apk","https://github.com:444/path"})assertFalse(s,ReleaseInfo.allowedDownload(s));}
+    @Test public void oversizeAndDuplicateAssetsAreRejected() throws Exception {JSONObject root=release();root.getJSONArray("assets").getJSONObject(0).put("size",100000000);assertThrows(IllegalArgumentException.class,()->ReleaseInfo.parse(root));JSONObject dup=release();dup.getJSONArray("assets").put(Json.copy(dup.getJSONArray("assets").getJSONObject(0)));assertThrows(IllegalArgumentException.class,()->ReleaseInfo.parse(dup));}
+    @Test public void downloadMustMatchBothTagAndAssetName()throws Exception{JSONObject root=release();root.getJSONArray("assets").getJSONObject(0).put("browser_download_url","https://github.com/HoodNewsSanaa/Velop-Control/releases/download/v0.1.0/Velop-Control-0.3.1.apk");assertThrows(IllegalArgumentException.class,()->ReleaseInfo.parse(root));}
+}

@@ -45,7 +45,7 @@ JDK 17, Android SDK Platform 35 and Build Tools 35.0.0. The checked-in Gradle wr
 ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 
-On Windows, use `gradlew.bat`. APK output is `app/build/outputs/apk/debug/app-debug.apk`. There are no third-party runtime libraries. JUnit, org.json and Robolectric are test-only dependencies. The GitHub Actions workflow runs the same checks and publishes a build artifact when this source is placed in a repository; publication status is recorded in `docs/build-verification.json`.
+On Windows, use `gradlew.bat`. APK output is `app/build/outputs/apk/debug/app-debug.apk`. There are no third-party runtime libraries. JUnit, org.json and Robolectric are test-only dependencies. The GitHub Actions workflow runs the same checks and publishes a build artifact when this source is placed in a repository.
 
 The delivered 0.4.0 APK is a non-debuggable preview signed with a permanent distribution key. That private key is stored separately and is not in this source archive. The temporary 0.2.0 signing key was not preserved; Android requires uninstalling that prototype once before installing this release, removing its local preferences/history. Future updates retain the distribution key for in-place installation.
 
@@ -55,11 +55,11 @@ The package was compiled, unit tested, checked with Android lint and verified wi
 
 Automated verification does not replace physical-phone or router testing. The user confirmed direct-child login and restart in 0.3.0 after recovering a locked account. New 0.4.0 paths, bridge-mode behavior and general settings writes still require staged hardware validation. Development tools did not contact or modify the user’s routers.
 
-Research, known hardware observations and protocol provenance are in [docs/research.md](docs/research.md). Third-party reference notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Third-party reference notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Changes in 0.3.0
 
-Backhaul GHz/radio/channel and matched reported link rates are separate from measured child-to-parent throughput. Report times are shown where provided, wired 1024 placeholders are hidden, and wired parent paths remain unverified. No static manual wiring override is included. Child access uses a firmware-appropriate password-check action and reports lockout/delay explicitly. See [firmware analysis](docs/firmware-analysis.md), [release notes](docs/release-notes.md) and [GitHub publishing setup](docs/github-release-setup.md).
+Backhaul GHz/radio/channel and matched reported link rates are separate from measured child-to-parent throughput. Report times are shown where provided, wired 1024 placeholders are hidden, and wired parent paths remain unverified. No static manual wiring override is included. Child access uses a firmware-appropriate password-check action and reports lockout/delay explicitly. See [release notes](docs/release-notes.md) and [GitHub publishing setup](docs/github-release-setup.md).
 
 GitHub release checks run on launch at most once per eight hours when enabled. Downloads are explicit, bounded, restricted to GitHub release hosts and verified against GitHub SHA-256 metadata plus this app’s package/version/signing certificate. Android asks the user to confirm installation. End-to-end publication/update testing remains pending until the repository and its first release exist.
 

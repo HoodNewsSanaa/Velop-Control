@@ -1,0 +1,44 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.velopcontrol.app'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.velopcontrol.app'
+        minSdk 26
+        targetSdk 35
+        versionCode 4
+        versionName '0.4.0'
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        distribution {
+            if (System.getenv('VELOP_STORE_FILE')) {
+                storeFile file(System.getenv('VELOP_STORE_FILE'))
+                storePassword System.getenv('VELOP_STORE_PASSWORD')
+                keyAlias 'velop-control'
+                keyPassword System.getenv('VELOP_STORE_PASSWORD')
+            }
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.distribution; minifyEnabled false } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            maxHeapSize = '2g'
+            jvmArgs '--add-opens=java.base/java.lang=ALL-UNNAMED',
+                '--add-opens=java.base/java.util=ALL-UNNAMED',
+                '--add-opens=java.base/java.io=ALL-UNNAMED',
+                '--add-opens=java.base/java.net=ALL-UNNAMED',
+                '--add-opens=java.base/java.security=ALL-UNNAMED',
+                '--add-opens=java.base/java.text=ALL-UNNAMED',
+                '--add-opens=java.base/jdk.internal.access=ALL-UNNAMED'
+            systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+        }
+    }
+}
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+    testImplementation 'org.robolectric:robolectric:4.17'
+}
