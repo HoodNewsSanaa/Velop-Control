@@ -4,7 +4,7 @@ Standalone Android app for stock Linksys Intelligent Mesh routers. Android 8.0+;
 
 ## Install and first test
 
-Open `Velop-Control-0.4.0.apk` on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
+Download the APK from [the v0.4.0 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.4.0), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
 
 Next, while on the local Wi-Fi, connect to the **primary Velop’s** address and enter its local admin password. In bridge mode, use the Velop’s assigned address rather than the OpenWrt/OPNsense gateway. Approve the local HTTPS certificate only after checking the address on a trusted network. The app pins its SHA-256 fingerprint. Successful passwords are remembered by default, encrypted on-device with Android Keystore; this can be disabled or cleared in Tools.
 
@@ -61,7 +61,7 @@ Third-party reference notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICE
 
 Backhaul GHz/radio/channel and matched reported link rates are separate from measured child-to-parent throughput. Report times are shown where provided, wired 1024 placeholders are hidden, and wired parent paths remain unverified. No static manual wiring override is included. Child access uses a firmware-appropriate password-check action and reports lockout/delay explicitly. See [release notes](docs/release-notes.md) and [GitHub publishing setup](docs/github-release-setup.md).
 
-GitHub release checks run on launch at most once per eight hours when enabled. Downloads are explicit, bounded, restricted to GitHub release hosts and verified against GitHub SHA-256 metadata plus this app’s package/version/signing certificate. Android asks the user to confirm installation. End-to-end publication/update testing remains pending until the repository and its first release exist.
+GitHub release checks run on launch at most once per eight hours when enabled. Downloads are explicit, bounded, restricted to GitHub release hosts and verified against GitHub SHA-256 metadata plus this app’s package/version/signing certificate. Android asks the user to confirm installation. The v0.4.0 release is published. Its live GitHub metadata and APK SHA-256 match the updater requirements. Download and installation through the Android app still need live-device verification.
 
 
 ## Changes in 0.4.0
@@ -74,4 +74,4 @@ GitHub release checks run on launch at most once per eight hours when enabled. D
 - Mesh parsing runs once per refresh, backhaul peer lookup is indexed, client sorting is reused per screen, search survives refresh/navigation, and local-history failure cannot discard a successful network read. History transaction rollback and the seven-day view window are handled correctly.
 - Updates cannot redirect navigation after the user leaves their page. Failed automatic checks also respect the eight-hour interval; APK metadata must match the exact release tag and filename.
 
-0.4.0 uses the same distribution key as 0.3.0 and can update it in place. See [code review](docs/code-review-0.4.0.md) and [wired-parent investigation](docs/wired-parent-investigation.md) for findings and remaining limits.
+0.4.0 uses the same distribution key as 0.3.0 and can update it in place.
