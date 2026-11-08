@@ -40,5 +40,10 @@ public final class CredentialVault {
         }catch(Exception e){return new char[0];}finally{if(plain!=null)Arrays.fill(plain,(byte)0);}
     }
     public synchronized void forgetAll(){preferences.edit().clear().commit();try{KeyStore store=KeyStore.getInstance("AndroidKeyStore");store.load(null);store.deleteEntry(ALIAS);}catch(Exception ignored){}}
+    /** Re-binds a saved password to a new address for the same approved certificate. */
+    public synchronized void move(String from,String to,String fingerprint) throws Exception {
+        if(from.equals(to))return;char[] saved=load(from,fingerprint);if(saved.length==0)return;
+        try{save(to,fingerprint,saved);forget(from);}finally{Arrays.fill(saved,'\0');}
+    }
     public synchronized void forget(String host){preferences.edit().remove(host).commit();}
 }

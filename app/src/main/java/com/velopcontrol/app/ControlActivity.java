@@ -48,6 +48,9 @@ public final class ControlActivity extends Activity {
     private JnapClient primary;private Topology topology;private HistoryStore history;private CredentialVault vault;
     private ReleaseInfo availableRelease;private java.io.File downloadedUpdate;private boolean updateBusy;
     private final ExecutorService updateWorker=Executors.newSingleThreadExecutor();
+    private final ExecutorService discoveryWorker=Executors.newSingleThreadExecutor();
+    private java.util.concurrent.atomic.AtomicBoolean discovery;private boolean autoLocated;
+    private EditText loginAddress;private TextView loginDiscovery;
     private String selectedHost="",tab="Overview",notice="",scope="All devices",nodeFilter="",clientQuery="";
     private boolean busy,resumed,auto,management,bridge,bridgeKnown,validating;
     private volatile boolean cancelled;
@@ -63,7 +66,7 @@ public final class ControlActivity extends Activity {
         if(preferences.getBoolean("updateChecks",true)&&System.currentTimeMillis()-preferences.getLong("lastUpdateCheck",0)>8L*3600000)checkUpdates(false);
     }
     private void chrome(String title,boolean navigation){
-        showingUpdates=false;showingOnboarding=false;
+        showingUpdates=false;showingOnboarding=false;loginAddress=null;loginDiscovery=null;
         ui=new Ui(this,preferences.getBoolean("dark",true));frame=ui.column();frame.setBackgroundColor(ui.bg);setContentView(frame);
         frame.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
         getWindow().setStatusBarColor(ui.bg);getWindow().setNavigationBarColor(ui.surface);
@@ -104,17 +107,70 @@ public final class ControlActivity extends Activity {
     private void login(String info){
         back=null;chrome("Your mesh, clearly.",false);LinearLayout intro=ui.card();ui.title(intro,"A clear view of home.");ui.text(intro,"See your nodes, find connected devices and manage supported settings from one local app.",16,ui.muted);page.addView(intro);
         LinearLayout card=ui.card();ui.heading(card,"Connect to your primary Velop");ui.text(card,"Use its local IP address and router admin password. In bridge mode, this is the Velop’s assigned IP address.",14,ui.muted);
-        EditText address=ui.input("Primary Velop IP",preferences.getString("lastHost","192.168.1.1"),false);address.setInputType(android.text.InputType.TYPE_CLASS_PHONE);card.addView(address);
+        PrimaryLocator.LocalNetwork network=localNetwork();String lastHost=preferences.getString("lastHost","");
+        EditText address=ui.input("Primary Velop IP",!lastHost.isEmpty()?lastHost:!network.gateway.isEmpty()?network.gateway:"192.168.1.1",false);address.setInputType(android.text.InputType.TYPE_CLASS_PHONE);card.addView(address);
+        loginDiscovery=ui.text(card,lastHost.isEmpty()&&!network.gateway.isEmpty()?"Suggested from your Wi-Fi gateway. In bridge mode, enter the Velop’s own address instead.":"",12,ui.muted);loginDiscovery.setVisibility(loginDiscovery.length()==0?View.GONE:View.VISIBLE);
         EditText password=ui.input("Local administrator password","",true);fillRemembered(address.getText().toString(),password);card.addView(password);
         address.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence t,int a,int c,int f){}public void afterTextChanged(Editable e){fillRemembered(e.toString(),password);}public void onTextChanged(CharSequence t,int a,int b,int c){}});
         Switch remember=ui.toggle("Remember passwords on this device",preferences.getBoolean("remember",true));card.addView(remember);remember.setOnCheckedChangeListener((button,on)->{preferences.edit().putBoolean("remember",on).apply();if(!on)vault.forgetAll();});
-        ui.action(card,"Connect securely",true,()->connect(address,password,true));ui.text(card,"Remembered passwords are encrypted on this device. Router access stays local; app update checks use GitHub.",12,ui.muted);page.addView(card);
+        ui.action(card,"Connect securely",true,()->connect(address,password,true));ui.action(card,"Find my primary Velop",false,()->locatePrimary(true));ui.text(card,"Remembered passwords are encrypted on this device. Router access stays local; app update checks use GitHub.",12,ui.muted);page.addView(card);
         if(!info.isEmpty())ui.note(page,info);
         ui.action(page,"Explore demo",false,()->{if(busy)return;topology=Topology.demo();tab="Overview";showTab();});
         ui.action(page,"App updates",false,this::updates);ui.text(page,"Android "+BuildConfig.VERSION_NAME+" · Local router access",12,ui.muted);
+        loginAddress=address;
+        if(discovery!=null)discoveryStatus("Finding your primary Velop…");
+        else if(!autoLocated&&rememberedPrimary().valid()){autoLocated=true;locatePrimary(false);}
+    }
+    private PrimaryLocator.Remembered rememberedPrimary(){return new PrimaryLocator.Remembered(preferences.getString("lastHost",""),preferences.getString("primaryPin",""),preferences.getString("primarySerial",""));}
+    private void discoveryStatus(String text){if(loginDiscovery==null)return;loginDiscovery.setText(text);loginDiscovery.setVisibility(text.isEmpty()?View.GONE:View.VISIBLE);}
+    /** Wi-Fi or Ethernet only: a VPN or mobile-data gateway is never suggested or scanned. */
+    @SuppressWarnings("deprecation") private PrimaryLocator.LocalNetwork localNetwork(){
+        try{android.net.ConnectivityManager manager=getSystemService(android.net.ConnectivityManager.class);if(manager==null)return PrimaryLocator.LocalNetwork.NONE;
+            for(android.net.Network network:manager.getAllNetworks()){
+                android.net.NetworkCapabilities caps=manager.getNetworkCapabilities(network);
+                if(caps==null||!(caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)||caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)))continue;
+                android.net.LinkProperties link=manager.getLinkProperties(network);if(link==null)continue;
+                String gateway="",address="";int prefix=0;
+                for(android.net.RouteInfo route:link.getRoutes())if(route.isDefaultRoute()&&route.getGateway() instanceof java.net.Inet4Address)gateway=route.getGateway().getHostAddress();
+                for(android.net.LinkAddress a:link.getLinkAddresses())if(a.getAddress() instanceof java.net.Inet4Address){address=a.getAddress().getHostAddress();prefix=a.getPrefixLength();}
+                if(!address.isEmpty())return new PrimaryLocator.LocalNetwork(gateway,address,prefix);
+            }
+        }catch(Exception ignored){}
+        return PrimaryLocator.LocalNetwork.NONE;
+    }
+    /** Certificate-only search for the remembered primary. No passwords are sent during discovery. */
+    private void locatePrimary(boolean interactive){
+        if(discovery!=null){if(interactive)toast("Already searching for your primary Velop");return;}
+        PrimaryLocator.Remembered remembered=rememberedPrimary();PrimaryLocator.LocalNetwork network=localNetwork();
+        if(!remembered.valid()){
+            if(!network.gateway.isEmpty()&&loginAddress!=null){loginAddress.setText(network.gateway);discoveryStatus("Suggested from your Wi-Fi gateway. In bridge mode, enter the Velop’s own address instead. After one successful connection, the app finds this Velop automatically.");}
+            else discoveryStatus("Connect once to your primary Velop. After that, the app finds it automatically, even if its address changes.");
+            return;
+        }
+        PrimaryLocator.Plan plan=PrimaryLocator.plan(remembered.host,network);
+        java.util.concurrent.atomic.AtomicBoolean cancel=new java.util.concurrent.atomic.AtomicBoolean();discovery=cancel;
+        String typed=loginAddress==null?"":loginAddress.getText().toString();discoveryStatus("Finding your primary Velop…");
+        discoveryWorker.execute(()->{
+            String found=null;try{found=PrimaryLocator.locate(JnapClient.LOCATOR_PROBE,remembered,plan,32,30000,cancel);}catch(Exception ignored){}
+            final String host=found;
+            main.post(()->{if(discovery==cancel)discovery=null;if(cancel.get()||isDestroyed())return;primaryLocated(remembered,host,typed,plan.size());});
+        });
+    }
+    private void primaryLocated(PrimaryLocator.Remembered remembered,String host,String typed,int searched){
+        if(host==null){discoveryStatus("Your primary Velop was not found ("+searched+" local addresses checked). Make sure you are on your home Wi-Fi, or enter its address.");return;}
+        boolean moved=!host.equals(remembered.host);
+        if(moved){
+            // Same approved certificate and serial: carry the pin and saved password to the new address.
+            SharedPreferences.Editor edit=preferences.edit().putString("pin:"+host,remembered.fingerprint).putString("lastHost",host);
+            if(!remembered.host.isEmpty()&&remembered.fingerprint.equals(preferences.getString("pin:"+remembered.host,"")))edit.remove("pin:"+remembered.host);
+            edit.apply();
+            if(preferences.getBoolean("remember",true))try{vault.move(remembered.host,host,remembered.fingerprint);}catch(Exception e){toast("Saved password could not be moved; enter it once");}
+        }
+        if(loginAddress!=null&&loginAddress.getText().toString().equals(typed))loginAddress.setText(host);
+        discoveryStatus(moved?"Primary Velop found at "+host+" (moved from "+remembered.host+"). Its approved certificate and serial number match.":"Primary Velop found at "+host+".");
     }
     private void connect(EditText address,EditText input,boolean asPrimary){
-        if(busy)return;final String host;try{host=ReadPolicy.privateAddress(address.getText().toString());}catch(Exception e){address.setError(e.getMessage());return;}
+        if(busy)return;if(discovery!=null){discovery.set(true);discovery=null;discoveryStatus("");}final String host;try{host=ReadPolicy.privateAddress(address.getText().toString());}catch(Exception e){address.setError(e.getMessage());return;}
         if(input.length()==0){input.setError("Enter this node’s local administrator password");return;}
         char[] secret=new char[input.length()];input.getText().getChars(0,input.length(),secret,0);input.setText("");
         ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(input.getWindowToken(),0);
@@ -122,13 +178,13 @@ public final class ControlActivity extends Activity {
             try{JnapClient.Identity identity=JnapClient.inspect(host);main.post(()->{
                 if(ticket!=generation||isDestroyed()){Arrays.fill(secret,'\0');return;}setBusy(false,"");
                 String known=preferences.getString("pin:"+host,"");Runnable establish=()->{
-                    try{JnapClient next=new JnapClient(host,secret,identity.fingerprint);Arrays.fill(secret,'\0');
-                        task("Checking local administrator access…",()->{try{JSONObject identityReply=next.read(ReadPolicy.INFO,false);SettingsRepository.requireOK(identityReply);next.authenticate(identityReply.getJSONObject("output"));
+                    try{JnapClient next=new JnapClient(host,secret,identity.fingerprint);Arrays.fill(secret,'\0');java.util.concurrent.atomic.AtomicReference<String> serial=new java.util.concurrent.atomic.AtomicReference<>("");
+                        task("Checking local administrator access…",()->{try{JSONObject identityReply=next.read(ReadPolicy.INFO,false);SettingsRepository.requireOK(identityReply);next.authenticate(identityReply.getJSONObject("output"));serial.set(identityReply.getJSONObject("output").optString("serialNumber"));
                             if(asPrimary)SettingsRepository.requireOK(next.read(ReadPolicy.DEVICES,true));
                             if(preferences.getBoolean("remember",true)){char[] remembered=next.passwordCopy();try{vault.save(host,identity.formatted(),remembered);}catch(Exception e){main.post(()->toast("Connected; password could not be saved on this device"));}finally{Arrays.fill(remembered,'\0');}}return next;}catch(Exception e){next.close();throw e;}},accepted->{
                             JnapClient old=sessions.put(host,accepted);if(old!=null)old.close();selectedHost=host;
                             preferences.edit().putString("pin:"+host,identity.formatted()).apply();
-                            if(asPrimary||primary!=null&&host.equals(primary.host())){primary=accepted;preferences.edit().putString("lastHost",host).apply();topology=null;latest.clear();tab="Overview";back=null;refresh();}
+                            if(asPrimary||primary!=null&&host.equals(primary.host())){primary=accepted;preferences.edit().putString("lastHost",host).putString("primaryPin",identity.formatted()).putString("primarySerial",serial.get()).apply();topology=null;latest.clear();tab="Overview";back=null;refresh();}
                             else{notice="Connected directly to "+host+". Other node sessions are unchanged.";back=null;tab="Nodes";showTab();}
                         });
                     }catch(Exception e){Arrays.fill(secret,'\0');message("Connection failed",safeMessage(e));}
@@ -536,5 +592,5 @@ public final class ControlActivity extends Activity {
     @Override public void onConfigurationChanged(Configuration configuration){super.onConfigurationChanged(configuration);if(showingOnboarding)onboardingScreen();else if(back==null){if(topology==null)login("");else showTab();}}
     @Override protected void onResume(){super.onResume();resumed=true;schedule();scheduleRestart();scheduleOnboarding();}
     @Override protected void onPause(){resumed=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);main.removeCallbacks(onboardingPoll);super.onPause();}
-    @Override protected void onDestroy(){disconnect();worker.shutdownNow();updateWorker.shutdownNow();history.close();super.onDestroy();}
+    @Override protected void onDestroy(){if(discovery!=null)discovery.set(true);disconnect();worker.shutdownNow();updateWorker.shutdownNow();discoveryWorker.shutdownNow();history.close();super.onDestroy();}
 }

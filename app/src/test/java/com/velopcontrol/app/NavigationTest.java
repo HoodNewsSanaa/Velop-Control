@@ -58,4 +58,8 @@ public class NavigationTest {
         SettingsRepository.Snapshot snapshot=new SettingsRepository.Snapshot(SettingsCatalog.find("wifi"),raw,"192.168.1.1");SettingsForm form=new SettingsForm(new Ui(activity,true),snapshot,true);
         EditText password=(EditText)findHint(form.view,"Wi-Fi password");assertNotNull(password);password.setText("new-password");JSONObject draft=form.collect();assertEquals("RADIO_5GHz",Json.get(draft,"radios.0.radioID"));assertEquals("new-password",Json.get(draft,"radios.0.settings.wpaPersonalSettings.passphrase"));assertNull(Json.get(draft,"radios.0.supportedModes"));SettingsValidation.check(snapshot.spec,draft,raw);
     }
+    @Test public void primaryDiscoveryExplainsFirstConnectionWithoutSendingRequests(){
+        click("Find my primary Velop");
+        assertNotNull(find(root(),"Connect once to your primary Velop. After that, the app finds it automatically, even if its address changes."));
+    }
 }
