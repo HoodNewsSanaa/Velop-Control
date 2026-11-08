@@ -7,19 +7,35 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Finds the remembered primary Velop on the local network, even after its address changes.
  *
- * A candidate matches only when it presents the exact certificate the user approved for the primary
- * AND an unauthenticated identity read over a connection pinned to that certificate reports the
- * remembered serial number. Probes are certificate-only TLS handshakes; no credentials or HTTP
- * requests are sent to hosts that do not present the approved certificate.
+ * Probes are certificate-only TLS handshakes. Only hosts presenting either the approved certificate or
+ * a Linksys firmware certificate receive one anonymous identity read (pinned to the certificate they
+ * presented), and a host matches only if it reports the remembered serial number. No credentials are
+ * sent during discovery.
+ *
+ * Linksys firmware ships one certificate per firmware build: every node on the same build presents the
+ * same certificate, and a firmware update replaces it. The serial number distinguishes nodes; a
+ * changed certificate is reported so the user approves it through the normal connect flow.
  */
 public final class PrimaryLocator {
     /** Larger subnets are narrowed to the phone's own /24 to keep the search bounded. */
     public static final int MAX_SCAN_HOSTS = 1022;
     static final int PRIORITY_TIMEOUT_MS = 1500, SCAN_TIMEOUT_MS = 700;
 
+    /** The certificate a host presented: formatted SHA-256 fingerprint and RFC 2253 subject. */
+    public static final class Certificate {
+        public final String fingerprint, subject;
+        public Certificate(String fingerprint, String subject) { this.fingerprint = fingerprint == null ? "" : fingerprint; this.subject = subject == null ? "" : subject; }
+    }
+
+    /** A located primary. {@code certificateChanged} means the serial matched but the certificate is new. */
+    public static final class Match {
+        public final String host, fingerprint; public final boolean certificateChanged;
+        Match(String host, String fingerprint, boolean certificateChanged) { this.host = host; this.fingerprint = fingerprint; this.certificateChanged = certificateChanged; }
+    }
+
     public interface Probe {
-        /** Certificate-only TLS inspection; returns the formatted SHA-256 certificate fingerprint. */
-        String fingerprint(String host, int timeoutMs) throws Exception;
+        /** Certificate-only TLS inspection. */
+        Certificate certificate(String host, int timeoutMs) throws Exception;
         /** Serial number from an unauthenticated identity read pinned to {@code fingerprint}. */
         String serial(String host, String fingerprint) throws Exception;
     }
@@ -69,36 +85,61 @@ public final class PrimaryLocator {
         return new Plan(new ArrayList<>(priority), scan);
     }
 
-    /** Returns the matching host, or null when the remembered primary was not found. */
-    public static String locate(Probe probe, Remembered remembered, Plan plan, int threads, long budgetMs, AtomicBoolean cancelled) throws InterruptedException {
+    /** Returns the located primary, or null when it was not found. */
+    public static Match locate(Probe probe, Remembered remembered, Plan plan, int threads, long budgetMs, AtomicBoolean cancelled) throws InterruptedException {
         if (!remembered.valid()) return null;
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(budgetMs);
         for (String host : plan.priority) {
             if (cancelled.get() || System.nanoTime() > deadline) return null;
-            if (matches(probe, remembered, host, PRIORITY_TIMEOUT_MS)) return host;
+            Match match = match(probe, remembered, host, PRIORITY_TIMEOUT_MS);
+            if (match != null) return match;
         }
         if (plan.scan.isEmpty() || cancelled.get()) return null;
         ExecutorService pool = Executors.newFixedThreadPool(Math.max(1, Math.min(threads, plan.scan.size())));
         try {
-            CompletionService<String> results = new ExecutorCompletionService<>(pool);
-            for (String host : plan.scan) results.submit(() -> !cancelled.get() && matches(probe, remembered, host, SCAN_TIMEOUT_MS) ? host : null);
+            CompletionService<Match> results = new ExecutorCompletionService<>(pool);
+            for (String host : plan.scan) results.submit(() -> cancelled.get() ? null : match(probe, remembered, host, SCAN_TIMEOUT_MS));
             for (int done = 0; done < plan.scan.size(); done++) {
                 long remaining = deadline - System.nanoTime();
                 if (remaining <= 0 || cancelled.get()) return null;
-                Future<String> next = results.poll(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(250)), TimeUnit.NANOSECONDS);
+                Future<Match> next = results.poll(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(250)), TimeUnit.NANOSECONDS);
                 if (next == null) { done--; continue; }
-                try { String host = next.get(); if (host != null) return host; } catch (ExecutionException ignored) {}
+                try { Match match = next.get(); if (match != null) return match; } catch (ExecutionException ignored) {}
             }
             return null;
         } finally { pool.shutdownNow(); }
     }
 
-    static boolean matches(Probe probe, Remembered remembered, String host, int timeoutMs) {
+    static Match match(Probe probe, Remembered remembered, String host, int timeoutMs) {
         try {
-            if (!remembered.fingerprint.equals(probe.fingerprint(host, timeoutMs))) return false;
-            // A shared firmware certificate alone could match other Linksys nodes; the serial decides.
-            return remembered.serial.equals(probe.serial(host, remembered.fingerprint));
-        } catch (Exception e) { return false; }
+            Certificate presented = probe.certificate(host, timeoutMs);
+            boolean approved = remembered.fingerprint.equals(presented.fingerprint);
+            // Other devices never receive an HTTP request. Nodes on the same firmware build share a
+            // certificate, and updates replace it, so the serial number decides.
+            if (!approved && !linksys(presented.subject)) return null;
+            if (!remembered.serial.equals(probe.serial(host, presented.fingerprint))) return null;
+            return new Match(host, presented.fingerprint, !approved);
+        } catch (Exception e) { return null; }
+    }
+
+    /** Stock Linksys firmware certificates are issued for linksyssmartwifi.com. */
+    public static boolean linksys(String subject) {
+        if (subject == null) return false;
+        for (String part : subject.split("(?<!\\\\),")) if (part.trim().equalsIgnoreCase("CN=linksyssmartwifi.com")) return true;
+        return false;
+    }
+
+    /** Text for the certificate approval dialog. {@code sameSerial} is null when no serial was compared. */
+    public static String trustNotice(boolean changed, boolean linksys, Boolean sameSerial) {
+        StringBuilder b = new StringBuilder();
+        if (changed) {
+            b.append("Linksys firmware updates replace this certificate, so a change right after an update is expected. A change without an update may mean another device is answering at this address.");
+            if (Boolean.TRUE.equals(sameSerial)) b.append(" This device reports the same serial number as your primary Velop.");
+            else if (Boolean.FALSE.equals(sameSerial)) b.append(" This device reports a DIFFERENT serial number from your primary Velop.");
+            b.append("\n\n");
+        }
+        if (linksys) b.append("Linksys uses one certificate per firmware build, shared by its nodes, and its private key is included in public firmware downloads. Pinning detects unexpected changes but cannot prove which device answered. ");
+        return b.append("Confirm this is your router on a trusted local network. Credentials have not been sent. This certificate will be pinned for future connections.").toString();
     }
 
     private static String privateOrEmpty(String host) {

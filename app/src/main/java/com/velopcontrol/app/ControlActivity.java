@@ -151,23 +151,25 @@ public final class ControlActivity extends Activity {
         java.util.concurrent.atomic.AtomicBoolean cancel=new java.util.concurrent.atomic.AtomicBoolean();discovery=cancel;
         String typed=loginAddress==null?"":loginAddress.getText().toString();discoveryStatus("Finding your primary Velop…");
         discoveryWorker.execute(()->{
-            String found=null;try{found=PrimaryLocator.locate(JnapClient.LOCATOR_PROBE,remembered,plan,32,30000,cancel);}catch(Exception ignored){}
-            final String host=found;
-            main.post(()->{if(discovery==cancel)discovery=null;if(cancel.get()||isDestroyed())return;primaryLocated(remembered,host,typed,plan.size());});
+            PrimaryLocator.Match found=null;try{found=PrimaryLocator.locate(JnapClient.LOCATOR_PROBE,remembered,plan,32,30000,cancel);}catch(Exception ignored){}
+            final PrimaryLocator.Match match=found;
+            main.post(()->{if(discovery==cancel)discovery=null;if(cancel.get()||isDestroyed())return;primaryLocated(remembered,match,typed,plan.size());});
         });
     }
-    private void primaryLocated(PrimaryLocator.Remembered remembered,String host,String typed,int searched){
-        if(host==null){discoveryStatus("Your primary Velop was not found ("+searched+" local addresses checked). Make sure you are on your home Wi-Fi, or enter its address.");return;}
-        boolean moved=!host.equals(remembered.host);
+    private void primaryLocated(PrimaryLocator.Remembered remembered,PrimaryLocator.Match match,String typed,int searched){
+        if(match==null){discoveryStatus("Your primary Velop was not found ("+searched+" local addresses checked). Make sure you are on your home Wi-Fi, or enter its address.");return;}
+        String host=match.host;boolean moved=!host.equals(remembered.host);
         if(moved){
-            // Same approved certificate and serial: carry the pin and saved password to the new address.
+            // Same serial: carry the last approved pin and saved password to the new address. A changed
+            // certificate still goes through the explicit "certificate changed" approval on connect.
             SharedPreferences.Editor edit=preferences.edit().putString("pin:"+host,remembered.fingerprint).putString("lastHost",host);
             if(!remembered.host.isEmpty()&&remembered.fingerprint.equals(preferences.getString("pin:"+remembered.host,"")))edit.remove("pin:"+remembered.host);
             edit.apply();
             if(preferences.getBoolean("remember",true))try{vault.move(remembered.host,host,remembered.fingerprint);}catch(Exception e){toast("Saved password could not be moved; enter it once");}
         }
         if(loginAddress!=null&&loginAddress.getText().toString().equals(typed))loginAddress.setText(host);
-        discoveryStatus(moved?"Primary Velop found at "+host+" (moved from "+remembered.host+"). Its approved certificate and serial number match.":"Primary Velop found at "+host+".");
+        String where="Primary Velop found at "+host+(moved?" (moved from "+remembered.host+")":"")+".";
+        discoveryStatus(match.certificateChanged?where+" Its serial number matches, but its certificate is new, which is expected after a Linksys firmware update. Review and approve it when you connect.":moved?where+" Its approved certificate and serial number match.":where);
     }
     private void connect(EditText address,EditText input,boolean asPrimary){
         if(busy)return;if(discovery!=null){discovery.set(true);discovery=null;discoveryStatus("");}final String host;try{host=ReadPolicy.privateAddress(address.getText().toString());}catch(Exception e){address.setError(e.getMessage());return;}
@@ -175,7 +177,12 @@ public final class ControlActivity extends Activity {
         char[] secret=new char[input.length()];input.getText().getChars(0,input.length(),secret,0);input.setText("");
         ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(input.getWindowToken(),0);
         int ticket=generation;setBusy(true,"Inspecting local HTTPS certificate…");worker.execute(()->{
-            try{JnapClient.Identity identity=JnapClient.inspect(host);main.post(()->{
+            try{JnapClient.Identity identity=JnapClient.inspect(host);
+                // For a changed certificate, an anonymous identity read (no credentials) helps the user decide.
+                String knownPin=preferences.getString("pin:"+host,""),primarySerial=preferences.getString("primarySerial","");Boolean serialMatches=null;
+                if(!knownPin.isEmpty()&&!knownPin.equals(identity.formatted())&&!primarySerial.isEmpty()&&host.equals(preferences.getString("lastHost","")))
+                    try{serialMatches=primarySerial.equals(JnapClient.LOCATOR_PROBE.serial(host,identity.formatted()));}catch(Exception ignored){}
+                final Boolean sameSerial=serialMatches;main.post(()->{
                 if(ticket!=generation||isDestroyed()){Arrays.fill(secret,'\0');return;}setBusy(false,"");
                 String known=preferences.getString("pin:"+host,"");Runnable establish=()->{
                     try{JnapClient next=new JnapClient(host,secret,identity.fingerprint);Arrays.fill(secret,'\0');java.util.concurrent.atomic.AtomicReference<String> serial=new java.util.concurrent.atomic.AtomicReference<>("");
@@ -190,7 +197,7 @@ public final class ControlActivity extends Activity {
                     }catch(Exception e){Arrays.fill(secret,'\0');message("Connection failed",safeMessage(e));}
                 };
                 if(known.equals(identity.formatted()))establish.run();else ui.dialog(known.isEmpty()?"Trust this local router?":"Router certificate changed")
-                    .setMessage("Address: "+host+"\nCertificate: "+identity.subject+"\n\nSHA-256\n"+identity.formatted()+"\n\nConfirm this is your router on a trusted local network. Credentials have not been sent. This certificate will be pinned for future connections.")
+                    .setMessage("Address: "+host+"\nCertificate: "+identity.subject+"\n\nSHA-256\n"+identity.formatted()+"\n\n"+PrimaryLocator.trustNotice(!known.isEmpty(),PrimaryLocator.linksys(identity.subject),sameSerial))
                     .setNegativeButton("Cancel",(d,w)->Arrays.fill(secret,'\0')).setPositiveButton("Trust & connect",(d,w)->establish.run()).setOnCancelListener(d->Arrays.fill(secret,'\0')).show();
             });}catch(Exception e){Arrays.fill(secret,'\0');main.post(()->{if(ticket==generation&&!isDestroyed()){setBusy(false,"");message("Could not connect",safeMessage(e));}});}
         });

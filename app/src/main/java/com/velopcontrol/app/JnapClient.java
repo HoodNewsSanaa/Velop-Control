@@ -57,9 +57,12 @@ public final class JnapClient implements AutoCloseable, SettingsRepository.Trans
         }
     }
 
-    /** Network probe for {@link PrimaryLocator}: certificate-only inspection, then a pinned anonymous identity read. */
+    /** Network probe for {@link PrimaryLocator}: certificate-only inspection, then an anonymous identity read pinned to the presented certificate. */
     public static final PrimaryLocator.Probe LOCATOR_PROBE = new PrimaryLocator.Probe() {
-        public String fingerprint(String host, int timeoutMs) throws Exception { return inspect(host, timeoutMs).formatted(); }
+        public PrimaryLocator.Certificate certificate(String host, int timeoutMs) throws Exception {
+            Identity identity = inspect(host, timeoutMs);
+            return new PrimaryLocator.Certificate(identity.formatted(), identity.subject);
+        }
         public String serial(String host, String fingerprint) throws Exception {
             try (JnapClient client = new JnapClient(host, new char[0], Identity.parse(fingerprint))) {
                 JSONObject reply = client.read(ReadPolicy.INFO, false);

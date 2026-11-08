@@ -10,7 +10,7 @@ public final class SettingsCatalog {
     private static final Set<String> READS=new HashSet<>(), WRITES=new HashSet<>();
     static {
         Collections.addAll(READS,"nodes/setup/GetSelectedChannels","diagnostics/GetSystemStats","router/GetEthernetPortConnections",
-            "router/GetWANSettings","router/GetWANSettings2","diagnostics/GetPingStatus",Authentication.STATUS,Authentication.CHECK,"core/CheckAdminPassword");
+            "router/GetWANSettings","diagnostics/GetPingStatus",Authentication.STATUS,Authentication.CHECK,"core/CheckAdminPassword");
         Collections.addAll(WRITES,"core/Reboot","core/SetAdminPassword2","core/SetAdminPassword3","devicelist/SetDeviceProperties",
             "diagnostics/StartPing","nodes/setup/StartAutoChannelSelection");
     }
