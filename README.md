@@ -1,12 +1,12 @@
-# Velop Control 0.5.0
+# Velop Control 0.6.1
 
 Standalone Android app for stock Linksys Intelligent Mesh routers. Android 8.0+; native phone and tablet layouts; no WebView, Linksys account or separate backend. The first installable build is a development preview, with management controls off by default.
 
 ## Install and first test
 
-Download the APK from [the v0.5.0 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.5.0), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
+Download the APK from [the v0.6.1 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.6.1), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
 
-Next, while on the local Wi-Fi, connect to the **primary Velop’s** address and enter its local admin password. In bridge mode, use the Velop’s assigned address rather than the OpenWrt/OPNsense gateway. Approve the local HTTPS certificate only after checking the address on a trusted network. The app pins its SHA-256 fingerprint. Successful passwords are remembered by default, encrypted on-device with Android Keystore; this can be disabled or cleared in Tools.
+Next, while on the local Wi-Fi, connect to the **primary Velop’s** address (on first use the field suggests your Wi-Fi gateway, which is the primary in router mode) and enter its local admin password. In bridge mode, use the Velop’s assigned address rather than the OpenWrt/OPNsense gateway. Approve the local HTTPS certificate only after checking the address on a trusted network. The app pins its SHA-256 fingerprint. Successful passwords are remembered by default, encrypted on-device with Android Keystore; this can be disabled or cleared in Tools.
 
 Keep controls disabled for the first hardware session. Use **Tools → Run sequential validation**, then **Export diagnostic log**. It makes one read at a time, stops authenticated tests for a node after rejection, and never tests setters. Keep the app open until collection finishes. Each additional node must be connected separately from its details page; passwords are not sprayed across the mesh. Proceed one hardware test at a time.
 
@@ -33,7 +33,9 @@ If a write times out, the app cannot tell whether the router applied it. It does
 
 All router traffic is native Java over pinned HTTPS on port 443. Only numeric private IPv4 addresses are accepted; redirects and HTTP fallback are disabled. Before the first credentialed request, a certificate-only TLS connection presents the fingerprint for explicit trust. Matching pins are reused on later connections; a change requires another approval. First trust does not establish identity independently of the user’s trusted-network check.
 
-Successful passwords can be saved encrypted with an Android Keystore AES-GCM key, bound to the local host and approved certificate. They are excluded from saved view state and autofill; entry fields and session arrays are cleared on disconnect. Tools can disable saving or forget stored credentials. Temporary immutable Java strings used in networking cannot be reliably zeroized. Android screenshots and cloud/device-transfer backups are disabled. No analytics, advertisements, arbitrary action console or MQTT/SSH transport is included. GitHub is the explicit Internet exception for app updates; no router credentials are included in update requests. Automatic release checks can be disabled.
+Pinning has a firmware limit. Stock Linksys firmware ships its HTTPS certificate **and private key** inside each public firmware image (verified in MX4200 1.0.13.216903 and 2.0.7.216903). Every node on the same build presents the same certificate, and each firmware update replaces it. Expect a **Router certificate changed** prompt after a Velop firmware update; the dialog explains this and, for the primary, reports whether the device's serial number still matches (read anonymously, without credentials). Because the key is public, pinning detects unexpected changes but cannot prove which device answered: someone already on your LAN with the same firmware could impersonate a node. Use the app on a network you trust. A saved password at an unchanged address survives the update and is re-saved under the newly approved certificate.
+
+Successful passwords can be saved encrypted with an Android Keystore AES-GCM key, bound to the local host and approved certificate. They are excluded from saved view state and autofill; entry fields and session arrays are cleared on disconnect. Tools can disable saving or forget stored credentials. Temporary immutable Java strings used in networking cannot be reliably zeroized. Screenshots and the recent-apps preview are blocked by default; **Tools → Allow screenshots** turns this off after a warning. Cloud/device-transfer backups are disabled. No analytics, advertisements, arbitrary action console or MQTT/SSH transport is included. GitHub is the explicit Internet exception for app updates; no router credentials are included in update requests. Automatic release checks can be disabled.
 
 Diagnostic JSON contains actions, results, durations, structural field types/counts, boolean capability flags and model/firmware. It excludes raw responses, passwords, SSIDs, device names, MACs and IPs. Optional local history stores device labels/MACs/association events inside the app and can be cleared. Exported validation logs do not include that history.
 
@@ -82,3 +84,18 @@ GitHub release checks run on launch at most once per eight hours when enabled. D
 Open **Nodes → Add mesh nodes** for wired or wireless onboarding through the primary's stock firmware. Wireless setup uses the primary's Bluetooth radio; Android remains on the existing mesh Wi-Fi. Enable management controls before starting. The app verifies the mesh coordinator and firmware support, previews the change, starts once, and monitors new connected Slave members. It temporarily enables only the requested onboarding flag and restores flags it enabled after confirmation, five minutes while open, or explicit End setup. Flags already enabled remain enabled.
 
 Automatic setup may enroll multiple eligible unconfigured nodes; power only the intended node nearby. Bluetooth work already underway may still finish after its flag is disabled. Keep the app open. If Android closes it, reconnect to the original primary and finish the pending cleanup shown in setup. This never removes joined members or resets routers. Hardware validation remains pending. **86 automated tests pass** and Android lint reports **0 errors**. The permanent signing certificate is unchanged for in-place updates from 0.3.0 and 0.4.0.
+
+
+## Changes in 0.6.0
+
+Automatic primary discovery and per-build certificate handling, described below. **98 automated tests pass** and Android lint reports **0 errors**. The permanent signing certificate is unchanged for in-place updates from 0.3.0–0.5.0.
+
+## Changes in 0.6.1
+
+Node parents come from the mesh backhaul report rather than the device inventory, the Mesh connections diagram draws each node under its parent, and **Tools → Allow screenshots** can lift the default screenshot block. **100 automated tests pass** and Android lint reports **0 errors**.
+
+## Automatic primary discovery
+
+After one successful connection, the app remembers the primary Velop's approved certificate fingerprint and serial number, and finds it automatically when the login screen opens, even if its address changed (common in bridge mode, where the main router assigns it by DHCP). It checks the last address, then the Wi-Fi gateway, then the phone's own subnet (capped at 1,022 addresses; larger networks are narrowed to the phone's /24). **Find my primary Velop** runs the same search on demand.
+
+Discovery sends no passwords and no HTTP requests to other devices: each probe is a certificate-only TLS handshake on port 443. Only a host presenting the approved certificate or a stock Linksys certificate (`CN=linksyssmartwifi.com`) receives an anonymous `core/GetDeviceInfo` read pinned to the certificate it presented, and it is accepted only if its serial number matches. The serial number matters because nodes on the same firmware build share one certificate. After a firmware update the primary is still found by serial number, and the login screen asks you to approve its new certificate when you connect; discovery never approves a certificate by itself. When the primary has moved, its last approved pin and saved password move with it. Only Wi-Fi and Ethernet networks are used; VPN and mobile-data gateways are ignored. The app adds the normal `ACCESS_NETWORK_STATE` permission to read the gateway and subnet. Connecting still requires tapping **Connect securely**.

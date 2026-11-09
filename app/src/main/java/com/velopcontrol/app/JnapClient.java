@@ -32,22 +32,46 @@ public final class JnapClient implements AutoCloseable, SettingsRepository.Trans
             for (byte v : fingerprint) { if (b.length() > 0) b.append(':'); b.append(String.format("%02X", v & 255)); }
             return b.toString();
         }
+        /** Parses the colon-separated form produced by {@link #formatted()}. */
+        public static byte[] parse(String formatted) {
+            if (formatted == null || !formatted.matches("[0-9A-F]{2}(:[0-9A-F]{2}){31}")) throw new IllegalArgumentException("Invalid certificate fingerprint");
+            String[] parts = formatted.split(":"); byte[] out = new byte[32];
+            for (int i = 0; i < 32; i++) out[i] = (byte) Integer.parseInt(parts[i], 16);
+            return out;
+        }
     }
 
     // This connection retrieves only the certificate. It never sends HTTP or credentials.
-    public static Identity inspect(String address) throws Exception {
+    public static Identity inspect(String address) throws Exception { return inspect(address, 5000); }
+    public static Identity inspect(String address, int timeoutMs) throws Exception {
         String host = ReadPolicy.privateAddress(address);
         SSLContext context = SSLContext.getInstance("TLS");
         context.init(null, new TrustManager[]{trust(null)}, null);
         try (java.net.Socket socket = new java.net.Socket()) {
-            socket.connect(new java.net.InetSocketAddress(host, 443), 5000);
+            socket.connect(new java.net.InetSocketAddress(host, 443), timeoutMs);
             try (SSLSocket secure = (SSLSocket) context.getSocketFactory().createSocket(socket, host, 443, true)) {
-                secure.setSoTimeout(5000);
+                secure.setSoTimeout(timeoutMs);
                 secure.startHandshake();
                 return new Identity((X509Certificate) secure.getSession().getPeerCertificates()[0]);
             }
         }
     }
+
+    /** Network probe for {@link PrimaryLocator}: certificate-only inspection, then an anonymous identity read pinned to the presented certificate. */
+    public static final PrimaryLocator.Probe LOCATOR_PROBE = new PrimaryLocator.Probe() {
+        public PrimaryLocator.Certificate certificate(String host, int timeoutMs) throws Exception {
+            Identity identity = inspect(host, timeoutMs);
+            return new PrimaryLocator.Certificate(identity.formatted(), identity.subject);
+        }
+        public String serial(String host, String fingerprint) throws Exception {
+            try (JnapClient client = new JnapClient(host, new char[0], Identity.parse(fingerprint))) {
+                JSONObject reply = client.read(ReadPolicy.INFO, false);
+                SettingsRepository.requireOK(reply);
+                JSONObject output = reply.optJSONObject("output");
+                return output == null ? "" : output.optString("serialNumber");
+            }
+        }
+    };
 
     @android.annotation.SuppressLint("CustomX509TrustManager") // Self-signed LAN device: explicit first trust, then exact SHA-256 pin. No credentials in inspection.
     private static X509TrustManager trust(byte[] expected) {
