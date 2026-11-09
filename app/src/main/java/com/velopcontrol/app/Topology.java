@@ -15,7 +15,7 @@ public final class Topology {
     public static final class Node {
         public String id, name, ip, parentId, parentIp, link, firmware, model, rssi, rate;
         public boolean primary, seen, wirelessGroupReported;
-        public String reportedParentId, radio="", channel="", backhaulTimestamp="", linkRate="", linkRateTimestamp="", linkRateSource="", stationMac="", apMac="";
+        public String reportedParentId, parentSource="", radio="", channel="", backhaulTimestamp="", linkRate="", linkRateTimestamp="", linkRateSource="", stationMac="", apMac="";
         public int clients;
     }
     public static final class Client {
@@ -91,14 +91,21 @@ public final class Topology {
             node.radio=value(wireless,"radioID");node.channel=value(wireless,"channel");if(node.channel.equals("0"))node.channel="";node.backhaulTimestamp=value(b,"timestamp");
             node.stationMac=mac(value(wireless,"stationBSSID"));node.apMac=mac(value(wireless,"apBSSID"));
             if("Wired".equalsIgnoreCase(node.link))node.rate=""; // bh_report hard-codes 1024 for wired links.
-            if (!node.ip.isEmpty()) nodeByIp.put(node.ip,node.id);
+            // Index every address a node is known by: inventory interfaces and the backhaul report.
+            for (JSONObject c : connections) { String ip = value(c,"ipAddress"); if (!ip.isEmpty()) nodeByIp.putIfAbsent(ip,node.id); }
+            if (!value(b,"ipAddress").isEmpty()) nodeByIp.put(value(b,"ipAddress"),node.id);
             t.nodes.add(node);
         }
         JSONObject identity = output(raw, ReadPolicy.INFO);
         for (Node n : t.nodes) {
+            // The backhaul report (bh_report) is the mesh's own uplink view. The inventory's
+            // parentDeviceID only records where an interface was last seen, so it is a fallback.
+            String backhaulParent = n.parentIp.isEmpty() || n.parentIp.equals("0.0.0.0") ? null : nodeByIp.get(n.parentIp);
             String explicitParent=first(entries(byId.get(n.id),"connections"),"parentDeviceID");
-            n.parentId = byId.containsKey(explicitParent)?explicitParent:nodeByIp.get(n.parentIp);
-            if (n.id.equals(n.parentId)) n.parentId = null;
+            if (backhaulParent != null && !backhaulParent.equals(n.id)) { n.parentId = backhaulParent; n.parentSource = "Backhaul report"; }
+            else if (byId.containsKey(explicitParent) && !explicitParent.equals(n.id)) { n.parentId = explicitParent; n.parentSource = "Device inventory (fallback)"; }
+            else n.parentId = null;
+            if (n.primary) { n.parentId = null; n.parentSource = ""; }
             n.reportedParentId=n.parentId;
             if (n.primary) {
                 if (n.firmware.isEmpty()) n.firmware = value(identity,"firmwareVersion");

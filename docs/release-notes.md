@@ -1,3 +1,11 @@
+Velop Control 0.6.1 — accurate mesh diagram
+
+- Node parents now come from the mesh backhaul report (the firmware's bh_report), with the device inventory's last-seen parent only as a fallback. Previously the inventory value took priority, which could attach nodes to the wrong parent. Node details show which source was used.
+- The Mesh connections diagram is drawn as a real tree: each node appears directly under its parent instead of in alphabetical order. Nodes without a reported parent are listed separately and labelled. Shared connector lines are neutral; the link into each node shows wired (blue dashed) or wireless (green).
+- New **Tools → Allow screenshots** option. Screenshots and the recent-apps preview stay blocked by default because they would capture device names, IP/MAC addresses and settings.
+
+100 automated tests pass; Android lint reports 0 errors. Hardware validation is pending.
+
 Velop Control 0.6.0 — find your primary automatically
 
 - The login screen finds your primary Velop automatically after one successful connection, even if its address changed (common in bridge mode). It checks the last address, then the Wi-Fi gateway, then the phone's subnet. **Find my primary Velop** runs the search on demand.

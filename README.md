@@ -1,10 +1,10 @@
-# Velop Control 0.6.0
+# Velop Control 0.6.1
 
 Standalone Android app for stock Linksys Intelligent Mesh routers. Android 8.0+; native phone and tablet layouts; no WebView, Linksys account or separate backend. The first installable build is a development preview, with management controls off by default.
 
 ## Install and first test
 
-Download the APK from [the v0.6.0 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.6.0), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
+Download the APK from [the v0.6.1 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.6.1), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
 
 Next, while on the local Wi-Fi, connect to the **primary Velop’s** address (on first use the field suggests your Wi-Fi gateway, which is the primary in router mode) and enter its local admin password. In bridge mode, use the Velop’s assigned address rather than the OpenWrt/OPNsense gateway. Approve the local HTTPS certificate only after checking the address on a trusted network. The app pins its SHA-256 fingerprint. Successful passwords are remembered by default, encrypted on-device with Android Keystore; this can be disabled or cleared in Tools.
 
@@ -35,7 +35,7 @@ All router traffic is native Java over pinned HTTPS on port 443. Only numeric pr
 
 Pinning has a firmware limit. Stock Linksys firmware ships its HTTPS certificate **and private key** inside each public firmware image (verified in MX4200 1.0.13.216903 and 2.0.7.216903). Every node on the same build presents the same certificate, and each firmware update replaces it. Expect a **Router certificate changed** prompt after a Velop firmware update; the dialog explains this and, for the primary, reports whether the device's serial number still matches (read anonymously, without credentials). Because the key is public, pinning detects unexpected changes but cannot prove which device answered: someone already on your LAN with the same firmware could impersonate a node. Use the app on a network you trust. A saved password at an unchanged address survives the update and is re-saved under the newly approved certificate.
 
-Successful passwords can be saved encrypted with an Android Keystore AES-GCM key, bound to the local host and approved certificate. They are excluded from saved view state and autofill; entry fields and session arrays are cleared on disconnect. Tools can disable saving or forget stored credentials. Temporary immutable Java strings used in networking cannot be reliably zeroized. Android screenshots and cloud/device-transfer backups are disabled. No analytics, advertisements, arbitrary action console or MQTT/SSH transport is included. GitHub is the explicit Internet exception for app updates; no router credentials are included in update requests. Automatic release checks can be disabled.
+Successful passwords can be saved encrypted with an Android Keystore AES-GCM key, bound to the local host and approved certificate. They are excluded from saved view state and autofill; entry fields and session arrays are cleared on disconnect. Tools can disable saving or forget stored credentials. Temporary immutable Java strings used in networking cannot be reliably zeroized. Screenshots and the recent-apps preview are blocked by default; **Tools → Allow screenshots** turns this off after a warning. Cloud/device-transfer backups are disabled. No analytics, advertisements, arbitrary action console or MQTT/SSH transport is included. GitHub is the explicit Internet exception for app updates; no router credentials are included in update requests. Automatic release checks can be disabled.
 
 Diagnostic JSON contains actions, results, durations, structural field types/counts, boolean capability flags and model/firmware. It excludes raw responses, passwords, SSIDs, device names, MACs and IPs. Optional local history stores device labels/MACs/association events inside the app and can be cleared. Exported validation logs do not include that history.
 
@@ -89,6 +89,10 @@ Automatic setup may enroll multiple eligible unconfigured nodes; power only the 
 ## Changes in 0.6.0
 
 Automatic primary discovery and per-build certificate handling, described below. **98 automated tests pass** and Android lint reports **0 errors**. The permanent signing certificate is unchanged for in-place updates from 0.3.0–0.5.0.
+
+## Changes in 0.6.1
+
+Node parents come from the mesh backhaul report rather than the device inventory, the Mesh connections diagram draws each node under its parent, and **Tools → Allow screenshots** can lift the default screenshot block. **100 automated tests pass** and Android lint reports **0 errors**.
 
 ## Automatic primary discovery
 

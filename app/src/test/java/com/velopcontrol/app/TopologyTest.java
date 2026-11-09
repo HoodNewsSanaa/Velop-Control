@@ -69,4 +69,30 @@ public class TopologyTest {
         raw.put(ReadPolicy.NODE_CONNECTIONS,new JSONObject("{\"result\":\"OK\",\"output\":{\"nodeWirelessConnections\":[{\"deviceID\":\"B\",\"connections\":[{\"macAddress\":\"AA:BB:CC:DD:EE:FF\",\"negotiatedMbps\":600,\"wireless\":{\"signalDecibels\":-60}}]}]}}"));
         Topology.Client c=Topology.parse(raw).clients.get(0);assertEquals("A",c.nodeId);assertEquals("",c.rate);assertEquals("",c.rssi);
     }
+    @Test public void backhaulReportOutranksInventoryParentAndPrimaryHasNone() throws Exception {
+        // Inventory says C was last seen on A; the backhaul report says C uplinks through B.
+        Topology t=Topology.parse(fixture("[{\"deviceID\":\"A\",\"isAuthority\":true,\"connections\":[{\"ipAddress\":\"192.168.1.10\",\"parentDeviceID\":\"C\"}]},"
+            +"{\"deviceID\":\"B\",\"nodeType\":\"Slave\",\"connections\":[{\"ipAddress\":\"192.168.1.11\",\"parentDeviceID\":\"A\"}]},"
+            +"{\"deviceID\":\"C\",\"nodeType\":\"Slave\",\"connections\":[{\"ipAddress\":\"192.168.1.12\",\"parentDeviceID\":\"A\"}]},"
+            +"{\"deviceID\":\"D\",\"nodeType\":\"Slave\",\"connections\":[{\"ipAddress\":\"192.168.1.13\",\"parentDeviceID\":\"A\"}]}]",
+            "[{\"deviceUUID\":\"B\",\"ipAddress\":\"192.168.1.11\",\"parentIPAddress\":\"192.168.1.10\",\"connectionType\":\"Wired\"},"
+            +"{\"deviceUUID\":\"C\",\"ipAddress\":\"192.168.1.12\",\"parentIPAddress\":\"192.168.1.11\",\"connectionType\":\"Wireless\"},"
+            +"{\"deviceUUID\":\"D\",\"ipAddress\":\"192.168.1.13\",\"parentIPAddress\":\"0.0.0.0\",\"connectionType\":\"Wireless\"}]"));
+        Map<String,Topology.Node> n=new HashMap<>();for(Topology.Node x:t.nodes)n.put(x.id,x);
+        assertNull(n.get("A").parentId);
+        assertEquals("B",n.get("C").parentId);assertEquals("Backhaul report",n.get("C").parentSource);
+        assertEquals("A",n.get("B").parentId);
+        assertEquals("Unknown backhaul parent falls back to inventory","A",n.get("D").parentId);assertEquals("Device inventory (fallback)",n.get("D").parentSource);
+    }
+    @Test public void diagramDrawsChildrenDirectlyUnderTheirParents() throws Exception {
+        Topology t=new Topology();String[][] rows={{"P",null,"Primary"},{"A","Z","Attic"},{"B","P","Basement"},{"Z","P","Zebra room"},{"X","missing","Xylophone"},{"L1","L2","Loop one"},{"L2","L1","Loop two"}};
+        for(String[] r:rows){Topology.Node x=new Topology.Node();x.id=r[0];x.parentId=r[1];x.name=r[2];x.primary=r[0].equals("P");t.nodes.add(x);}
+        t.nodes.sort(Comparator.comparing((Topology.Node x)->!x.primary).thenComparing(x->x.name));
+        List<Topology.Node> order=new ArrayList<>();List<Integer> depths=new ArrayList<>(),parents=new ArrayList<>();
+        TopologyView.layout(t,order,depths,parents);
+        List<String> ids=new ArrayList<>();for(Topology.Node x:order)ids.add(x.id);
+        assertEquals(Arrays.asList("P","B","Z","A","X","L1","L2"),ids);
+        assertEquals(Arrays.asList(0,1,1,2,0,0,1),depths);
+        assertEquals(Arrays.asList(-1,0,0,2,-1,-1,5),parents);
+    }
 }
