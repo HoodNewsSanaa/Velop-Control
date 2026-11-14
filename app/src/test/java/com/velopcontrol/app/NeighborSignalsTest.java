@@ -66,4 +66,17 @@ public class NeighborSignalsTest {
         assertTrue(n.get("A").macs.containsAll(Arrays.asList("AA:00:00:00:01:10", "AA:00:00:00:01:13")));
         assertTrue(n.get("B").macs.containsAll(Arrays.asList("AA:00:00:00:02:10", "AA:00:00:00:02:13")));
     }
+    @Test public void positiveFirmwareValuesAreSignalToNoiseLikeTheFirmwareReadsThem() throws Exception {
+        // 37 -> -58 dBm (wired child), 23 -> -72 dBm (primary): the firmware's QCA offset of -95.
+        NeighborSignals.Report r = only(mesh("-72"), report("C", "AA:00:00:00:01:11", 149, 23, "AA:00:00:00:02:11", 149, 37));
+        assertEquals(-58, r.heard.get(0).rssi); assertEquals(-72, r.heard.get(1).rssi);
+        assertEquals("W", r.wouldMoveTo.id);
+        assertEquals(-95 + 40, NeighborSignals.toDbm(40)); assertEquals(-61, NeighborSignals.toDbm(-61));
+    }
+    @Test public void nodesWithoutAReportAreListed() throws Exception {
+        Topology t = mesh("-72");
+        List<NeighborSignals.Report> reports = NeighborSignals.parse(report("c"), t);
+        List<String> silent = new ArrayList<>(); for (Topology.Node n : NeighborSignals.missing(reports, t)) silent.add(n.id);
+        assertEquals(Arrays.asList("P", "W", "K"), silent);
+    }
 }

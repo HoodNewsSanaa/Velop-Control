@@ -1,3 +1,11 @@
+Velop Control 0.6.3 — neighbor signal fixes
+
+- Fixes Neighbor signals discarding real readings. The firmware reports each neighbor as signal minus noise (a positive number); the app now converts it the same way the firmware does (value − 95 = dBm). In 0.6.2 most real neighbor readings were dropped.
+- Neighbor signals now lists nodes the primary has no report from, and explains why: nodes report about hourly and when their Wi-Fi starts, only while node steering is on, and the primary forgets reports when it restarts.
+- Release signing uses a new distribution key from 0.6.1 onward; installs signed with the 0.3.0–0.5.0 key must be uninstalled once.
+
+111 automated tests pass; Android lint reports 0 errors. Hardware validation is pending.
+
 Velop Control 0.6.2 — neighbor signals & steering
 
 - New **Nodes → Neighbor signals & steering…** (also under Tools). Reads the primary's neighbor report (nodes/diagnostics/GetNodeNeighborInfo) and shows, for every node, how strongly it hears each other node's radios, with channel and band.
@@ -25,6 +33,6 @@ Velop Control 0.6.0 — find your primary automatically
 - Firmware analysis of MX4200 1.0.13.216903 and 2.0.7.216903 showed that Linksys ships one HTTPS certificate (with its private key) per firmware build, shared by nodes and replaced by updates. After a Velop firmware update, the primary is still found by serial number, and the "Router certificate changed" dialog explains the update, reports whether the serial number still matches, and states that pinning cannot prove which device answered. Saved passwords carry over after approval.
 - Removed an unused read action from the allowlist. Adds the normal ACCESS_NETWORK_STATE permission (Wi-Fi/Ethernet gateway and subnet only; VPN and mobile networks are ignored).
 
-98 automated tests pass; Android lint reports 0 errors. Signed with the same permanent certificate as 0.3.0–0.5.0 for in-place updates.
+98 automated tests pass; Android lint reports 0 errors.
 
 Hardware validation of discovery and the updated certificate prompts is pending. Discovery is limited to the phone's own network segment (at most 1,022 addresses; larger networks narrow to the phone's /24).

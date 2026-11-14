@@ -12,10 +12,15 @@ import java.util.*;
  * wireless uplink at or above -60 dBm is left alone; otherwise a node is told to reconsider when
  * another node (excluding its own children and 2.4 GHz radios) is more than 10 dB stronger, or
  * when the strongest is the primary. Settings changed on a router would change the outcome.
+ *
+ * Firmware facts (pub_nb_rssi, nb_report, nb2client_survey): each node scans for radios broadcasting
+ * the home Wi-Fi names about hourly and when its Wi-Fi starts, and only while node steering is enabled.
+ * Its reported "rssi" is signal minus noise; like the firmware, a positive value is read as
+ * value + QCA_RSSI_OFFSET (-95) dBm. The primary keeps each node's last report in memory.
  */
 public final class NeighborSignals {
     public static final String ACTION = "nodes/diagnostics/GetNodeNeighborInfo";
-    public static final int ADEQUATE_DBM = -60, STEER_MARGIN_DB = 10;
+    public static final int ADEQUATE_DBM = -60, STEER_MARGIN_DB = 10, QCA_RSSI_OFFSET = -95;
 
     public static final class Heard {
         public final String bssid; public final int channel, rssi; public final Topology.Node node; public final boolean exact;
@@ -49,7 +54,7 @@ public final class NeighborSignals {
                 String bssid = Topology.mac(n.optString("macAddress"));
                 Object rssi = n.opt("rssi");
                 if (!bssid.matches("[0-9A-F]{2}(:[0-9A-F]{2}){5}") || !(rssi instanceof Number)) continue;
-                int dbm = ((Number) rssi).intValue();
+                int dbm = toDbm(((Number) rssi).intValue());
                 if (dbm >= 0 || dbm < -120) continue;
                 Topology.Node exact = exact(topology, bssid);
                 Topology.Node match = exact != null ? exact : nearby(topology, bssid);
@@ -61,6 +66,18 @@ public final class NeighborSignals {
         }
         reports.sort(Comparator.comparing((Report r) -> r.node == null || !r.node.primary).thenComparing(r -> r.node == null ? "~" + r.deviceId : r.node.name));
         return reports;
+    }
+
+    /** Same conversion as the firmware's nb2client_survey: positive values are QCA signal-to-noise figures. */
+    static int toDbm(int reported) { return reported > 0 ? reported + QCA_RSSI_OFFSET : reported; }
+
+    /** Inventory nodes with no neighbor report stored on the primary. */
+    public static List<Topology.Node> missing(List<Report> reports, Topology topology) {
+        Set<String> reported = new HashSet<>();
+        for (Report r : reports) reported.add(r.deviceId.toUpperCase(Locale.ROOT));
+        List<Topology.Node> out = new ArrayList<>();
+        for (Topology.Node n : topology.nodes) if (!reported.contains(n.id.toUpperCase(Locale.ROOT))) out.add(n);
+        return out;
     }
 
     static Report assess(Topology.Node node, String id, List<Heard> heard, Topology topology) {
@@ -130,7 +147,7 @@ public final class NeighborSignals {
     }
     private static long value(String mac) { return Long.parseLong(mac.replace(":", ""), 16); }
 
-    /** Synthetic report for the demo mesh: same shape as the firmware response. */
+    /** Synthetic report for the demo mesh: same shape as the firmware response, including signal-to-noise values. */
     public static JSONObject demo(Topology t) {
         try {
             JSONArray devices = new JSONArray();
@@ -139,7 +156,7 @@ public final class NeighborSignals {
                 for (int j = 0; j < t.nodes.size(); j++) {
                     if (i == j) continue;
                     int rssi = -45 - 7 * Math.abs(i - j) - (i == 4 && j == 0 ? 6 : 0) + (i == 4 && j == 1 ? 9 : 0);
-                    neighbors.put(new JSONObject().put("macAddress", String.format(Locale.ROOT, "02:00:00:00:%02X:11", j)).put("channel", 149).put("rssi", rssi));
+                    neighbors.put(new JSONObject().put("macAddress", String.format(Locale.ROOT, "02:00:00:00:%02X:11", j)).put("channel", 149).put("rssi", rssi - QCA_RSSI_OFFSET));
                 }
                 devices.put(new JSONObject().put("deviceUUID", t.nodes.get(i).id).put("nodeMode", i == 0 ? "Master" : "Slave").put("neighborNodes", neighbors));
             }
