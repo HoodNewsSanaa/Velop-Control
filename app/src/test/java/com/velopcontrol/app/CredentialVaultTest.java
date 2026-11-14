@@ -25,4 +25,6 @@ public class CredentialVaultTest {
         CredentialVault vault=new CredentialVault(context,()->key);vault.save("192.168.1.1","pin","temporary-password".toCharArray());vault.forgetAll();assertEquals(0,new CredentialVault(context,()->key).load("192.168.1.1","pin").length);
     }
     @Test public void forgettingOneNodeKeepsOtherNodeCredentials()throws Exception{CredentialVault vault=new CredentialVault(context,()->key);vault.save("192.168.1.1","one","primary-pass".toCharArray());vault.save("192.168.1.2","two","child-pass".toCharArray());vault.forget("192.168.1.2");assertEquals(0,vault.load("192.168.1.2","two").length);assertArrayEquals("primary-pass".toCharArray(),vault.load("192.168.1.1","one"));}
+    @Test public void movingKeepsCertificateBindingAndRemovesOldAddress()throws Exception{CredentialVault vault=new CredentialVault(context,()->key);vault.save("192.168.1.20","pin","primary-pass".toCharArray());vault.move("192.168.1.20","192.168.1.77","pin");
+        assertArrayEquals("primary-pass".toCharArray(),vault.load("192.168.1.77","pin"));assertEquals(0,vault.load("192.168.1.20","pin").length);assertEquals(0,vault.load("192.168.1.77","other").length);}
 }

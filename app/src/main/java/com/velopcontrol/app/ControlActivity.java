@@ -48,6 +48,9 @@ public final class ControlActivity extends Activity {
     private JnapClient primary;private Topology topology;private HistoryStore history;private CredentialVault vault;
     private ReleaseInfo availableRelease;private java.io.File downloadedUpdate;private boolean updateBusy;
     private final ExecutorService updateWorker=Executors.newSingleThreadExecutor();
+    private final ExecutorService discoveryWorker=Executors.newSingleThreadExecutor();
+    private java.util.concurrent.atomic.AtomicBoolean discovery;private boolean autoLocated;
+    private EditText loginAddress;private TextView loginDiscovery;
     private String selectedHost="",tab="Overview",notice="",scope="All devices",nodeFilter="",clientQuery="";
     private boolean busy,resumed,auto,management,bridge,bridgeKnown,validating;
     private volatile boolean cancelled;
@@ -56,14 +59,14 @@ public final class ControlActivity extends Activity {
     private static final String[] TABS={"Overview","Nodes","Devices","Settings","Tools"};
     private final Runnable poll=()->{if(auto&&resumed&&!busy&&primary!=null&&back==null&&!restartActive()&&onboarding==null)refresh();else schedule();};
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-        preferences=getSharedPreferences("preferences",MODE_PRIVATE);ui=new Ui(this,preferences.getBoolean("dark",true));history=new HistoryStore(this);vault=new CredentialVault(this);
+        super.onCreate(state);
+        preferences=getSharedPreferences("preferences",MODE_PRIVATE);applyScreenshotPolicy();ui=new Ui(this,preferences.getBoolean("dark",true));history=new HistoryStore(this);vault=new CredentialVault(this);
         try(java.io.InputStream in=getAssets().open("settings.json")){SettingsCatalog.load(in);}catch(Exception e){new AlertDialog.Builder(this).setMessage("Settings catalog could not be loaded").setPositiveButton("Close",(d,w)->finish()).show();return;}
         auto=preferences.getBoolean("auto",false);login("");
         if(preferences.getBoolean("updateChecks",true)&&System.currentTimeMillis()-preferences.getLong("lastUpdateCheck",0)>8L*3600000)checkUpdates(false);
     }
     private void chrome(String title,boolean navigation){
-        showingUpdates=false;showingOnboarding=false;
+        showingUpdates=false;showingOnboarding=false;loginAddress=null;loginDiscovery=null;
         ui=new Ui(this,preferences.getBoolean("dark",true));frame=ui.column();frame.setBackgroundColor(ui.bg);setContentView(frame);
         frame.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
         getWindow().setStatusBarColor(ui.bg);getWindow().setNavigationBarColor(ui.surface);
@@ -104,37 +107,97 @@ public final class ControlActivity extends Activity {
     private void login(String info){
         back=null;chrome("Your mesh, clearly.",false);LinearLayout intro=ui.card();ui.title(intro,"A clear view of home.");ui.text(intro,"See your nodes, find connected devices and manage supported settings from one local app.",16,ui.muted);page.addView(intro);
         LinearLayout card=ui.card();ui.heading(card,"Connect to your primary Velop");ui.text(card,"Use its local IP address and router admin password. In bridge mode, this is the Velop’s assigned IP address.",14,ui.muted);
-        EditText address=ui.input("Primary Velop IP",preferences.getString("lastHost","192.168.1.1"),false);address.setInputType(android.text.InputType.TYPE_CLASS_PHONE);card.addView(address);
+        PrimaryLocator.LocalNetwork network=localNetwork();String lastHost=preferences.getString("lastHost","");
+        EditText address=ui.input("Primary Velop IP",!lastHost.isEmpty()?lastHost:!network.gateway.isEmpty()?network.gateway:"192.168.1.1",false);address.setInputType(android.text.InputType.TYPE_CLASS_PHONE);card.addView(address);
+        loginDiscovery=ui.text(card,lastHost.isEmpty()&&!network.gateway.isEmpty()?"Suggested from your Wi-Fi gateway. In bridge mode, enter the Velop’s own address instead.":"",12,ui.muted);loginDiscovery.setVisibility(loginDiscovery.length()==0?View.GONE:View.VISIBLE);
         EditText password=ui.input("Local administrator password","",true);fillRemembered(address.getText().toString(),password);card.addView(password);
         address.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence t,int a,int c,int f){}public void afterTextChanged(Editable e){fillRemembered(e.toString(),password);}public void onTextChanged(CharSequence t,int a,int b,int c){}});
         Switch remember=ui.toggle("Remember passwords on this device",preferences.getBoolean("remember",true));card.addView(remember);remember.setOnCheckedChangeListener((button,on)->{preferences.edit().putBoolean("remember",on).apply();if(!on)vault.forgetAll();});
-        ui.action(card,"Connect securely",true,()->connect(address,password,true));ui.text(card,"Remembered passwords are encrypted on this device. Router access stays local; app update checks use GitHub.",12,ui.muted);page.addView(card);
+        ui.action(card,"Connect securely",true,()->connect(address,password,true));ui.action(card,"Find my primary Velop",false,()->locatePrimary(true));ui.text(card,"Remembered passwords are encrypted on this device. Router access stays local; app update checks use GitHub.",12,ui.muted);page.addView(card);
         if(!info.isEmpty())ui.note(page,info);
         ui.action(page,"Explore demo",false,()->{if(busy)return;topology=Topology.demo();tab="Overview";showTab();});
         ui.action(page,"App updates",false,this::updates);ui.text(page,"Android "+BuildConfig.VERSION_NAME+" · Local router access",12,ui.muted);
+        loginAddress=address;
+        if(discovery!=null)discoveryStatus("Finding your primary Velop…");
+        else if(!autoLocated&&rememberedPrimary().valid()){autoLocated=true;locatePrimary(false);}
+    }
+    private PrimaryLocator.Remembered rememberedPrimary(){return new PrimaryLocator.Remembered(preferences.getString("lastHost",""),preferences.getString("primaryPin",""),preferences.getString("primarySerial",""));}
+    private void discoveryStatus(String text){if(loginDiscovery==null)return;loginDiscovery.setText(text);loginDiscovery.setVisibility(text.isEmpty()?View.GONE:View.VISIBLE);}
+    /** Wi-Fi or Ethernet only: a VPN or mobile-data gateway is never suggested or scanned. */
+    @SuppressWarnings("deprecation") private PrimaryLocator.LocalNetwork localNetwork(){
+        try{android.net.ConnectivityManager manager=getSystemService(android.net.ConnectivityManager.class);if(manager==null)return PrimaryLocator.LocalNetwork.NONE;
+            for(android.net.Network network:manager.getAllNetworks()){
+                android.net.NetworkCapabilities caps=manager.getNetworkCapabilities(network);
+                if(caps==null||!(caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)||caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)))continue;
+                android.net.LinkProperties link=manager.getLinkProperties(network);if(link==null)continue;
+                String gateway="",address="";int prefix=0;
+                for(android.net.RouteInfo route:link.getRoutes())if(route.isDefaultRoute()&&route.getGateway() instanceof java.net.Inet4Address)gateway=route.getGateway().getHostAddress();
+                for(android.net.LinkAddress a:link.getLinkAddresses())if(a.getAddress() instanceof java.net.Inet4Address){address=a.getAddress().getHostAddress();prefix=a.getPrefixLength();}
+                if(!address.isEmpty())return new PrimaryLocator.LocalNetwork(gateway,address,prefix);
+            }
+        }catch(Exception ignored){}
+        return PrimaryLocator.LocalNetwork.NONE;
+    }
+    /** Certificate-only search for the remembered primary. No passwords are sent during discovery. */
+    private void locatePrimary(boolean interactive){
+        if(discovery!=null){if(interactive)toast("Already searching for your primary Velop");return;}
+        PrimaryLocator.Remembered remembered=rememberedPrimary();PrimaryLocator.LocalNetwork network=localNetwork();
+        if(!remembered.valid()){
+            if(!network.gateway.isEmpty()&&loginAddress!=null){loginAddress.setText(network.gateway);discoveryStatus("Suggested from your Wi-Fi gateway. In bridge mode, enter the Velop’s own address instead. After one successful connection, the app finds this Velop automatically.");}
+            else discoveryStatus("Connect once to your primary Velop. After that, the app finds it automatically, even if its address changes.");
+            return;
+        }
+        PrimaryLocator.Plan plan=PrimaryLocator.plan(remembered.host,network);
+        java.util.concurrent.atomic.AtomicBoolean cancel=new java.util.concurrent.atomic.AtomicBoolean();discovery=cancel;
+        String typed=loginAddress==null?"":loginAddress.getText().toString();discoveryStatus("Finding your primary Velop…");
+        discoveryWorker.execute(()->{
+            PrimaryLocator.Match found=null;try{found=PrimaryLocator.locate(JnapClient.LOCATOR_PROBE,remembered,plan,32,30000,cancel);}catch(Exception ignored){}
+            final PrimaryLocator.Match match=found;
+            main.post(()->{if(discovery==cancel)discovery=null;if(cancel.get()||isDestroyed())return;primaryLocated(remembered,match,typed,plan.size());});
+        });
+    }
+    private void primaryLocated(PrimaryLocator.Remembered remembered,PrimaryLocator.Match match,String typed,int searched){
+        if(match==null){discoveryStatus("Your primary Velop was not found ("+searched+" local addresses checked). Make sure you are on your home Wi-Fi, or enter its address.");return;}
+        String host=match.host;boolean moved=!host.equals(remembered.host);
+        if(moved){
+            // Same serial: carry the last approved pin and saved password to the new address. A changed
+            // certificate still goes through the explicit "certificate changed" approval on connect.
+            SharedPreferences.Editor edit=preferences.edit().putString("pin:"+host,remembered.fingerprint).putString("lastHost",host);
+            if(!remembered.host.isEmpty()&&remembered.fingerprint.equals(preferences.getString("pin:"+remembered.host,"")))edit.remove("pin:"+remembered.host);
+            edit.apply();
+            if(preferences.getBoolean("remember",true))try{vault.move(remembered.host,host,remembered.fingerprint);}catch(Exception e){toast("Saved password could not be moved; enter it once");}
+        }
+        if(loginAddress!=null&&loginAddress.getText().toString().equals(typed))loginAddress.setText(host);
+        String where="Primary Velop found at "+host+(moved?" (moved from "+remembered.host+")":"")+".";
+        discoveryStatus(match.certificateChanged?where+" Its serial number matches, but its certificate is new, which is expected after a Linksys firmware update. Review and approve it when you connect.":moved?where+" Its approved certificate and serial number match.":where);
     }
     private void connect(EditText address,EditText input,boolean asPrimary){
-        if(busy)return;final String host;try{host=ReadPolicy.privateAddress(address.getText().toString());}catch(Exception e){address.setError(e.getMessage());return;}
+        if(busy)return;if(discovery!=null){discovery.set(true);discovery=null;discoveryStatus("");}final String host;try{host=ReadPolicy.privateAddress(address.getText().toString());}catch(Exception e){address.setError(e.getMessage());return;}
         if(input.length()==0){input.setError("Enter this node’s local administrator password");return;}
         char[] secret=new char[input.length()];input.getText().getChars(0,input.length(),secret,0);input.setText("");
         ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(input.getWindowToken(),0);
         int ticket=generation;setBusy(true,"Inspecting local HTTPS certificate…");worker.execute(()->{
-            try{JnapClient.Identity identity=JnapClient.inspect(host);main.post(()->{
+            try{JnapClient.Identity identity=JnapClient.inspect(host);
+                // For a changed certificate, an anonymous identity read (no credentials) helps the user decide.
+                String knownPin=preferences.getString("pin:"+host,""),primarySerial=preferences.getString("primarySerial","");Boolean serialMatches=null;
+                if(!knownPin.isEmpty()&&!knownPin.equals(identity.formatted())&&!primarySerial.isEmpty()&&host.equals(preferences.getString("lastHost","")))
+                    try{serialMatches=primarySerial.equals(JnapClient.LOCATOR_PROBE.serial(host,identity.formatted()));}catch(Exception ignored){}
+                final Boolean sameSerial=serialMatches;main.post(()->{
                 if(ticket!=generation||isDestroyed()){Arrays.fill(secret,'\0');return;}setBusy(false,"");
                 String known=preferences.getString("pin:"+host,"");Runnable establish=()->{
-                    try{JnapClient next=new JnapClient(host,secret,identity.fingerprint);Arrays.fill(secret,'\0');
-                        task("Checking local administrator access…",()->{try{JSONObject identityReply=next.read(ReadPolicy.INFO,false);SettingsRepository.requireOK(identityReply);next.authenticate(identityReply.getJSONObject("output"));
+                    try{JnapClient next=new JnapClient(host,secret,identity.fingerprint);Arrays.fill(secret,'\0');java.util.concurrent.atomic.AtomicReference<String> serial=new java.util.concurrent.atomic.AtomicReference<>("");
+                        task("Checking local administrator access…",()->{try{JSONObject identityReply=next.read(ReadPolicy.INFO,false);SettingsRepository.requireOK(identityReply);next.authenticate(identityReply.getJSONObject("output"));serial.set(identityReply.getJSONObject("output").optString("serialNumber"));
                             if(asPrimary)SettingsRepository.requireOK(next.read(ReadPolicy.DEVICES,true));
                             if(preferences.getBoolean("remember",true)){char[] remembered=next.passwordCopy();try{vault.save(host,identity.formatted(),remembered);}catch(Exception e){main.post(()->toast("Connected; password could not be saved on this device"));}finally{Arrays.fill(remembered,'\0');}}return next;}catch(Exception e){next.close();throw e;}},accepted->{
                             JnapClient old=sessions.put(host,accepted);if(old!=null)old.close();selectedHost=host;
                             preferences.edit().putString("pin:"+host,identity.formatted()).apply();
-                            if(asPrimary||primary!=null&&host.equals(primary.host())){primary=accepted;preferences.edit().putString("lastHost",host).apply();topology=null;latest.clear();tab="Overview";back=null;refresh();}
+                            if(asPrimary||primary!=null&&host.equals(primary.host())){primary=accepted;preferences.edit().putString("lastHost",host).putString("primaryPin",identity.formatted()).putString("primarySerial",serial.get()).apply();topology=null;latest.clear();tab="Overview";back=null;refresh();}
                             else{notice="Connected directly to "+host+". Other node sessions are unchanged.";back=null;tab="Nodes";showTab();}
                         });
                     }catch(Exception e){Arrays.fill(secret,'\0');message("Connection failed",safeMessage(e));}
                 };
                 if(known.equals(identity.formatted()))establish.run();else ui.dialog(known.isEmpty()?"Trust this local router?":"Router certificate changed")
-                    .setMessage("Address: "+host+"\nCertificate: "+identity.subject+"\n\nSHA-256\n"+identity.formatted()+"\n\nConfirm this is your router on a trusted local network. Credentials have not been sent. This certificate will be pinned for future connections.")
+                    .setMessage("Address: "+host+"\nCertificate: "+identity.subject+"\n\nSHA-256\n"+identity.formatted()+"\n\n"+PrimaryLocator.trustNotice(!known.isEmpty(),PrimaryLocator.linksys(identity.subject),sameSerial))
                     .setNegativeButton("Cancel",(d,w)->Arrays.fill(secret,'\0')).setPositiveButton("Trust & connect",(d,w)->establish.run()).setOnCancelListener(d->Arrays.fill(secret,'\0')).show();
             });}catch(Exception e){Arrays.fill(secret,'\0');main.post(()->{if(ticket==generation&&!isDestroyed()){setBusy(false,"");message("Could not connect",safeMessage(e));}});}
         });
@@ -173,7 +236,7 @@ public final class ControlActivity extends Activity {
         List<View> tiles=new ArrayList<>();LinearLayout mesh=ui.card();ui.metric(mesh,"Nodes reported",active+" / "+topology.nodes.size());ui.text(mesh,"Stock Intelligent Mesh",13,ui.muted);tiles.add(mesh);
         LinearLayout devices=ui.card();ui.metric(devices,"Clients with connection reports",String.valueOf(seen));ui.text(devices,topology.clients.size()+" known devices in inventory",13,ui.muted);tiles.add(devices);LinearLayout metrics=ui.row();metrics.setGravity(Gravity.TOP);for(int i=0;i<tiles.size();i++){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);p.bottomMargin=ui.d(10);if(i==0)p.rightMargin=ui.d(6);else p.leftMargin=ui.d(6);metrics.addView(tiles.get(i),p);}page.addView(metrics);
         if(topology.demo)ui.text(page,"Sample planned network",12,ui.muted);
-        LinearLayout graph=ui.card();ui.heading(graph,"Mesh connections");graph.addView(new TopologyView(this,topology,this::node),new LinearLayout.LayoutParams(-1,ui.d(Math.max(220,topology.nodes.size()*86))));ui.text(graph,"Blue dashed: wired · Green: wireless\nLinks show the parent reported by firmware. Cable paths and automatic parent selection stay under Linksys control.",12,ui.muted);page.addView(graph);
+        LinearLayout graph=ui.card();ui.heading(graph,"Mesh connections");graph.addView(new TopologyView(this,topology,this::node),new LinearLayout.LayoutParams(-1,ui.d(Math.max(220,topology.nodes.size()*86))));ui.text(graph,"Link into each node: blue dashed = wired, green = wireless.\nParents come from the mesh backhaul report (device inventory only as a fallback). Cable paths and automatic parent selection stay under Linksys control.",12,ui.muted);page.addView(graph);
         int weak=0;for(Topology.Node n:topology.nodes){try{if(Double.parseDouble(n.rssi)<=-75)weak++;}catch(Exception ignored){}}
         LinearLayout health=ui.card();ui.heading(health,"Network insights");ui.text(health,weak>0?weak+" weak wireless backhaul report"+(weak>1?"s":"")+". Check node placement and the reported parent.":"No weak wireless backhaul signal in the available reports.",15,weak>0?ui.warning:ui.text);
         int missing=(int)topology.nodes.stream().filter(n->!n.wirelessGroupReported).count();if(missing>0)ui.text(health,missing+" node(s) missing from the central wireless-client groups. This does not mean they have zero clients.",13,ui.muted);
@@ -181,7 +244,7 @@ public final class ControlActivity extends Activity {
         ui.note(page,"Connection counts and signals are firmware snapshots. Missing values stay unknown; wireless throughput is a past child-to-parent test, not an internet speed test.");
     }
     private void nodes(){
-        ui.action(page,"Add mesh nodes…",true,this::onboardingScreen);
+        ui.action(page,"Add mesh nodes…",true,this::onboardingScreen);ui.action(page,"Neighbor signals & steering…",false,this::neighborSignals);
         ui.text(page,"Tap a node for its parent, firmware and attached devices.",14,ui.muted);List<View> cards=new ArrayList<>();
         for(Topology.Node n:topology.nodes){LinearLayout card=ui.card();ui.text(card,n.primary?"PRIMARY MESH NODE":"MESH NODE",11,ui.accent);ui.heading(card,n.name);ui.text(card,Ui.known(n.ip)+" · "+Ui.known(n.model),14,ui.text);
             ui.text(card,(n.seen?"Reported in snapshot":"Status not reported")+" · "+(n.primary?"Mesh coordinator":Ui.known(n.link)),13,ui.muted);
@@ -192,7 +255,7 @@ public final class ControlActivity extends Activity {
     }
     private void detail(String title,Runnable previous){back=previous;chrome(title,true);ui.action(page,"‹ Back",false,()->{Runnable action=back;back=null;action.run();});}
     private void node(Topology.Node n){
-        detail(n.name,this::showTab);LinearLayout card=ui.card();ui.heading(card,"Node details");key(card,"Status",n.seen?"Reported in snapshot":"Not currently reported");key(card,"Address",n.ip);key(card,"Model",n.model);key(card,"Firmware",n.firmware);key(card,"Connection",n.primary?"Primary mesh node":n.link);if(!n.primary)key(card,"Parent",n.parentId==null?n.parentIp:topology.nodeName(n.parentId));key(card,"Backhaul signal",n.rssi==null||n.rssi.isEmpty()?"Not reported":n.rssi+" dBm");key(card,"Wireless backhaul radio",Topology.backhaulRadio(n));key(card,"Reported wireless link rate",n.linkRate.isEmpty()?"Not available from firmware":n.linkRate+" Mbps");if(!n.linkRateSource.isEmpty()){key(card,"Link-rate source",n.linkRateSource);key(card,"Link-rate report time",measurementTime(n.linkRateTimestamp));}key(card,"Last throughput measurement",measurementTime(n.backhaulTimestamp));key(card,"Child → parent throughput",hopValue(n));key(card,"Assigned client reports",n.clients+(n.wirelessGroupReported?"":" (central group missing)"));page.addView(card);
+        detail(n.name,this::showTab);LinearLayout card=ui.card();ui.heading(card,"Node details");key(card,"Status",n.seen?"Reported in snapshot":"Not currently reported");key(card,"Address",n.ip);key(card,"Model",n.model);key(card,"Firmware",n.firmware);key(card,"Connection",n.primary?"Primary mesh node":n.link);if(!n.primary){key(card,"Parent",n.parentId==null?n.parentIp:topology.nodeName(n.parentId));key(card,"Parent source",n.parentId==null?"Not reported":n.parentSource);}key(card,"Backhaul signal",n.rssi==null||n.rssi.isEmpty()?"Not reported":n.rssi+" dBm");key(card,"Wireless backhaul radio",Topology.backhaulRadio(n));key(card,"Reported wireless link rate",n.linkRate.isEmpty()?"Not available from firmware":n.linkRate+" Mbps");if(!n.linkRateSource.isEmpty()){key(card,"Link-rate source",n.linkRateSource);key(card,"Link-rate report time",measurementTime(n.linkRateTimestamp));}key(card,"Last throughput measurement",measurementTime(n.backhaulTimestamp));key(card,"Child → parent throughput",hopValue(n));key(card,"Assigned client reports",n.clients+(n.wirelessGroupReported?"":" (central group missing)"));page.addView(card);
         ui.action(page,"View devices on this node",true,()->{nodeFilter=n.id;scope="All devices";tab="Devices";back=null;showTab();});
         NodeHealth observation=health.get(n.ip);
         key(card,"Uptime at last direct read",observation==null?"Not read yet":formatUptime(observation.uptime));
@@ -269,12 +332,16 @@ public final class ControlActivity extends Activity {
         if(audit!=null)ui.action(checks,"Export diagnostic log",false,()->export(audit.json(),"Velop-Validation-"+new java.text.SimpleDateFormat("yyyyMMdd-HHmmss",Locale.ROOT).format(new Date())+".json"));page.addView(checks);
         LinearLayout app=ui.card();ui.heading(app,"App preferences");Switch controls=ui.toggle("Enable management controls",management);app.addView(controls);controls.setOnCheckedChangeListener((b,on)->{if(on){controls.setChecked(false);ui.dialog("Enable management controls?").setMessage("This preview can send supported configuration commands. Writes have not been tested on your hardware. Every change requires a separate review. Controls turn off when you disconnect.").setNegativeButton("Keep read-only",null).setPositiveButton("Enable controls",(d,w)->{management=true;showTab();}).show();}else{management=false;}});
         Switch polling=ui.toggle("Refresh every 30 seconds while open",auto);app.addView(polling);polling.setOnCheckedChangeListener((b,on)->{auto=on;preferences.edit().putBoolean("auto",on).apply();schedule();});
+        Switch shots=ui.toggle("Allow screenshots",preferences.getBoolean("screenshots",false));app.addView(shots);shots.setOnCheckedChangeListener((b,on)->{
+            if(on){shots.setChecked(false);ui.dialog("Allow screenshots?").setMessage("Screenshots, screen recordings and the recent-apps preview will be able to capture device names, IP and MAC addresses and network settings. Password fields stay masked. You can turn this off again at any time.").setNegativeButton("Keep blocked",null).setPositiveButton("Allow",(d,w)->{preferences.edit().putBoolean("screenshots",true).apply();applyScreenshotPolicy();showTab();}).show();}
+            else{preferences.edit().putBoolean("screenshots",false).apply();applyScreenshotPolicy();}});
+        ui.text(app,"Off by default so screenshots and the recent-apps preview do not capture network details.",12,ui.muted);
         Switch dark=ui.toggle("Dark appearance",ui.dark);app.addView(dark);dark.setOnCheckedChangeListener((b,on)->{preferences.edit().putBoolean("dark",on).apply();showTab();});
         Switch historical=ui.toggle("Save local connection history (7 days)",preferences.getBoolean("history",false));app.addView(historical);historical.setOnCheckedChangeListener((b,on)->preferences.edit().putBoolean("history",on).apply());ui.text(app,"History stores device labels, MAC addresses and association reports inside this app. Exported validation logs exclude these identifiers.",12,ui.muted);
         ui.action(app,"View connection history",false,()->showHistory(null));ui.action(app,"Clear local history",false,()->ui.dialog("Clear connection history?").setNegativeButton("Keep",null).setPositiveButton("Clear",(d,w)->task("Clearing local history…",()->{history.clear();return true;},r->toast("Local history cleared"))).show());Switch remembered=ui.toggle("Remember passwords on this device",preferences.getBoolean("remember",true));app.addView(remembered);remembered.setOnCheckedChangeListener((button,on)->{preferences.edit().putBoolean("remember",on).apply();if(!on)vault.forgetAll();});
         ui.action(app,"Forget saved passwords",false,()->ui.dialog("Forget saved passwords?").setMessage("Current sessions stay connected. You will need the passwords on your next connection.").setNegativeButton("Keep",null).setPositiveButton("Forget",(d,w)->{vault.forgetAll();toast("Saved passwords removed");}).show());
         ui.action(app,"App updates",false,this::updates);page.addView(app);
-        LinearLayout diagnostics=ui.card();ui.heading(diagnostics,"Network tools");ui.action(diagnostics,"Add mesh nodes…",false,this::onboardingScreen);ui.action(diagnostics,"Ping from selected router",false,this::ping);ui.action(diagnostics,"Optimize wireless channels…",false,this::optimize);ui.action(diagnostics,"Change local admin password…",false,this::changePassword);ui.action(diagnostics,"API capability results",false,this::capabilities);page.addView(diagnostics);
+        LinearLayout diagnostics=ui.card();ui.heading(diagnostics,"Network tools");ui.action(diagnostics,"Add mesh nodes…",false,this::onboardingScreen);ui.action(diagnostics,"Neighbor signals & steering…",false,this::neighborSignals);ui.action(diagnostics,"Ping from selected router",false,this::ping);ui.action(diagnostics,"Optimize wireless channels…",false,this::optimize);ui.action(diagnostics,"Change local admin password…",false,this::changePassword);ui.action(diagnostics,"API capability results",false,this::capabilities);page.addView(diagnostics);
         LinearLayout about=ui.card();ui.heading(about,"Velop Control "+BuildConfig.VERSION_NAME);ui.text(about,"Independent Android client for stock Linksys mesh routers. Local JNAP over pinned HTTPS. GitHub is contacted only for app updates. No advertisements, WebView or separate backend.",14,ui.muted);ui.text(about,"Read support is firmware-dependent. Manual parent locking, node removal, full backup/restore and cloud subscription features are unavailable in this build.",13,ui.muted);ui.action(about,"Disconnect",false,()->{disconnect();login("");});page.addView(about);
     }
     private String onboardingKey(JnapClient session){return "onboardingPending:"+session.host();}
@@ -349,7 +416,7 @@ public final class ControlActivity extends Activity {
     private void validateAll(){
         if(topology.demo||primary==null){message("Connect to your mesh","Validation needs a local router session.");return;}if(busy){toast("Wait for the current operation");return;}
         audit=new AuditReport();cancelled=false;validating=true;main.removeCallbacks(poll);setBusy(true,"Starting sequential read-only validation…");showTab();int ticket=generation;List<JnapClient> targets=new ArrayList<>(sessions.values());
-        List<String> actions=new ArrayList<>(Arrays.asList(ReadPolicy.INFO,ReadPolicy.DEVICES,ReadPolicy.BACKHAUL,ReadPolicy.NODE_CONNECTIONS,ReadPolicy.CONNECTIONS,ReadPolicy.MODE,"diagnostics/GetSystemStats","nodes/setup/GetSelectedChannels","router/GetEthernetPortConnections"));for(SettingsCatalog.Spec s:SettingsCatalog.ALL)if(!s.read.isEmpty()&&!actions.contains(s.read))actions.add(s.read);
+        List<String> actions=new ArrayList<>(Arrays.asList(ReadPolicy.INFO,ReadPolicy.DEVICES,ReadPolicy.BACKHAUL,ReadPolicy.NODE_CONNECTIONS,ReadPolicy.CONNECTIONS,ReadPolicy.MODE,"diagnostics/GetSystemStats","nodes/setup/GetSelectedChannels","router/GetEthernetPortConnections",NeighborSignals.ACTION,"wirelessap/GetAdvancedRadioInfo","powertable/GetPowerTableSettings"));for(SettingsCatalog.Spec s:SettingsCatalog.ALL)if(!s.read.isEmpty()&&!actions.contains(s.read))actions.add(s.read);
         final AuditReport report=audit;final Map<String,String> checked=new HashMap<>();
         worker.execute(()->{int index=0;
             for(JnapClient target:targets){String alias="Node "+(++index);boolean rejected=false;
@@ -365,9 +432,57 @@ public final class ControlActivity extends Activity {
             main.post(()->{if(ticket!=generation||isDestroyed())return;validating=false;setBusy(false,"");pageStatus.putAll(checked);notice=(cancelled?"Validation stopped. ":"Validation finished. ")+report.summary();back=null;tab="Tools";showTab();schedule();});
         });
     }
+    private static final class SignalsRead {
+        final List<NeighborSignals.Report> reports;final Map<String,String> radios;
+        SignalsRead(List<NeighborSignals.Report> reports,Map<String,String> radios){this.reports=reports;this.radios=radios;}
+    }
+    /** Read-only: the primary's neighbor report, plus radio power and region from each connected node. */
+    private void neighborSignals(){
+        if(topology==null)return;
+        if(topology.demo){showSignals(NeighborSignals.parse(NeighborSignals.demo(topology),topology),new LinkedHashMap<>());return;}
+        if(primary==null){message("Connect first","Neighbor signals are read from the primary node.");return;}
+        JnapClient session=primary;Topology snapshot=topology;List<JnapClient> targets=new ArrayList<>(sessions.values());
+        task("Reading what each node hears…",()->{
+            List<NeighborSignals.Report> reports=NeighborSignals.parse(session.read(NeighborSignals.ACTION,true),snapshot);
+            Map<String,String> radios=new LinkedHashMap<>();for(JnapClient c:targets)radios.put(c.host(),radioSummary(c));
+            return new SignalsRead(reports,radios);
+        },r->showSignals(r.reports,r.radios));
+    }
+    static String radioSummary(JnapClient c) throws Exception {
+        StringBuilder b=new StringBuilder();
+        try{JSONObject r=c.read("wirelessap/GetAdvancedRadioInfo",true);SettingsRepository.requireOK(r);
+            for(JSONObject radio:Topology.entries(Topology.object(r,"output"),"radios")){String power=Topology.object(radio,"settings").optString("transmissionPower");
+                b.append(Topology.radioLabel(radio.optString("radioID"))).append(" power: ").append(power.matches("[A-Za-z]{1,20}")?power:"Not reported").append('\n');}
+        }catch(SecurityException e){throw e;}catch(Exception e){b.append("Radio power: not available on this firmware\n");}
+        try{JSONObject r=c.read("powertable/GetPowerTableSettings",true);SettingsRepository.requireOK(r);JSONObject o=Topology.object(r,"output");String country=o.optString("country");
+            b.append("Power-table region: ").append(country.matches("[A-Za-z]{2,3}")?country:"Not set").append(o.optBoolean("isPowerTableSelectable")?" (selectable)":" (fixed)");
+        }catch(SecurityException e){throw e;}catch(Exception e){b.append("Power-table region: not available on this firmware");}
+        return b.toString().trim();
+    }
+    private void showSignals(List<NeighborSignals.Report> reports,Map<String,String> radios){
+        detail("Neighbor signals",this::showTab);
+        ui.note(page,"How strongly each node hears the others on its radios, from the primary's neighbor report. The verdict applies the stock steering rules with default settings: an uplink at or above −60 dBm is left alone; otherwise the node moves when another node is more than 10 dB stronger, or when the strongest is the primary. Children and 2.4 GHz radios are ignored. Checks run about hourly or after a restart.");
+        if(reports.isEmpty())ui.note(page,"The primary returned an empty neighbor report. Nodes publish it after their periodic scan; try again later or after restarting a node.");
+        for(NeighborSignals.Report r:reports){
+            LinearLayout card=ui.card();Topology.Node n=r.node;ui.heading(card,n==null?"Node not in inventory":n.name);
+            if(n!=null&&!n.primary)ui.text(card,"Uplink: "+(n.parentId==null?"parent not reported":topology.nodeName(n.parentId))+" · "+Ui.known(n.link)+(n.rssi==null||n.rssi.isEmpty()?"":" · "+n.rssi+" dBm"),13,ui.muted);
+            ui.text(card,r.verdict,14,r.attention?ui.warning:ui.accent);
+            if(r.heard.isEmpty())ui.text(card,"No neighboring node radios reported.",13,ui.muted);
+            int shown=0;for(NeighborSignals.Heard h:r.heard){if(++shown>12)break;
+                String who=h.node==null?"Unidentified mesh radio ··"+h.bssid.substring(11):h.node.name+(h.exact?"":" (matched by address)");
+                boolean child=n!=null&&!n.primary&&"Wireless".equalsIgnoreCase(n.link)&&h.node!=null&&n.id.equals(h.node.parentId);
+                ui.text(card,who+" · "+h.rssi+" dBm · "+h.band()+(h.ignoredBand()?" · ignored by steering":"")+(child?" · its child, ignored":""),13,ui.text);}
+            page.addView(card);
+        }
+        LinearLayout power=ui.card();ui.heading(power,"Radio power & region");
+        if(topology.demo)ui.text(power,"Demo: connect to read each node's radio power setting and power-table region.",13,ui.muted);
+        for(Map.Entry<String,String> e:radios.entrySet()){String name=e.getKey();for(Topology.Node n:topology.nodes)if(e.getKey().equals(n.ip))name=n.name+" · "+e.getKey();ui.text(power,name,14,ui.text);ui.text(power,e.getValue(),13,ui.muted);}
+        ui.text(power,"Only nodes with a direct session are read. Connect directly to other nodes from their page to include them. Wi-Fi radio settings are shared from the primary; the power-table region caps each node's maximum power.",12,ui.muted);
+        page.addView(power);
+    }
     private void nodeDiagnostics(Topology.Node node,JnapClient session){
         task("Reading diagnostics for "+node.name+"…",()->{
-            Map<String,JSONObject> data=new LinkedHashMap<>();for(String a:new String[]{ReadPolicy.INFO,ReadPolicy.MODE,"diagnostics/GetSystemStats","router/GetEthernetPortConnections","nodes/setup/GetSelectedChannels"}){try{data.put(a,session.read(a,!a.equals(ReadPolicy.INFO)));}catch(SecurityException e){throw e;}catch(Exception e){data.put(a,new JSONObject().put("result","Unavailable"));}}return data;
+            Map<String,JSONObject> data=new LinkedHashMap<>();for(String a:new String[]{ReadPolicy.INFO,ReadPolicy.MODE,"diagnostics/GetSystemStats","router/GetEthernetPortConnections","nodes/setup/GetSelectedChannels","wirelessap/GetAdvancedRadioInfo","powertable/GetPowerTableSettings"}){try{data.put(a,session.read(a,!a.equals(ReadPolicy.INFO)));}catch(SecurityException e){throw e;}catch(Exception e){data.put(a,new JSONObject().put("result","Unavailable"));}}return data;
         },data->{detail(node.name+" diagnostics",()->node(node));for(Map.Entry<String,JSONObject> e:data.entrySet()){LinearLayout card=ui.card();ui.heading(card,Json.label(e.getKey().substring(e.getKey().lastIndexOf('/')+1).replaceFirst("^Get","")));key(card,"Result",SettingsRepository.safeCode(e.getValue().optString("result")));showSafeValues(card,e.getValue().optJSONObject("output"),0);page.addView(card);}});
     }
     private void wiredNeighbors(Topology.Node node,JnapClient session){
@@ -527,6 +642,7 @@ public final class ControlActivity extends Activity {
         }
         Intent install=new Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://"+getPackageName()+".updates/verified.apk"),"application/vnd.android.package-archive");install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);try{startActivity(install);}catch(ActivityNotFoundException e){message("Installer unavailable","This Android device does not expose a package installer. The verified APK has not been installed.");}
     }
+    private void applyScreenshotPolicy(){if(preferences.getBoolean("screenshots",false))getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);else getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);}
     private void key(LinearLayout parent,String label,String value){ui.text(parent,label,12,ui.muted);ui.text(parent,Ui.known(value),15,ui.text);}
     private void message(String title,String text){if(!isFinishing()&&!isDestroyed())ui.dialog(title).setMessage(text).setPositiveButton("OK",null).show();}
     private void toast(String text){Toast.makeText(this,text,Toast.LENGTH_SHORT).show();}
@@ -536,5 +652,5 @@ public final class ControlActivity extends Activity {
     @Override public void onConfigurationChanged(Configuration configuration){super.onConfigurationChanged(configuration);if(showingOnboarding)onboardingScreen();else if(back==null){if(topology==null)login("");else showTab();}}
     @Override protected void onResume(){super.onResume();resumed=true;schedule();scheduleRestart();scheduleOnboarding();}
     @Override protected void onPause(){resumed=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);main.removeCallbacks(onboardingPoll);super.onPause();}
-    @Override protected void onDestroy(){disconnect();worker.shutdownNow();updateWorker.shutdownNow();history.close();super.onDestroy();}
+    @Override protected void onDestroy(){if(discovery!=null)discovery.set(true);disconnect();worker.shutdownNow();updateWorker.shutdownNow();discoveryWorker.shutdownNow();history.close();super.onDestroy();}
 }

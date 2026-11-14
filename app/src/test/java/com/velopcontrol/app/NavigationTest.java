@@ -58,4 +58,17 @@ public class NavigationTest {
         SettingsRepository.Snapshot snapshot=new SettingsRepository.Snapshot(SettingsCatalog.find("wifi"),raw,"192.168.1.1");SettingsForm form=new SettingsForm(new Ui(activity,true),snapshot,true);
         EditText password=(EditText)findHint(form.view,"Wi-Fi password");assertNotNull(password);password.setText("new-password");JSONObject draft=form.collect();assertEquals("RADIO_5GHz",Json.get(draft,"radios.0.radioID"));assertEquals("new-password",Json.get(draft,"radios.0.settings.wpaPersonalSettings.passphrase"));assertNull(Json.get(draft,"radios.0.supportedModes"));SettingsValidation.check(snapshot.spec,draft,raw);
     }
+    @Test public void primaryDiscoveryExplainsFirstConnectionWithoutSendingRequests(){
+        click("Find my primary Velop");
+        assertNotNull(find(root(),"Connect once to your primary Velop. After that, the app finds it automatically, even if its address changes."));
+    }
+    @Test public void neighborSignalsExplainSteeringInDemo() throws Exception {
+        click("Explore demo");click("Nodes");click("Neighbor signals & steering…");
+        assertNotNull(find(root(),"Neighbor signals"));assertNotNull(find(root(),"Radio power & region"));
+        assertTrue(findContaining(root(),"should move it there")!=null);screenshot("neighbor-signals-phone");
+    }
+    private TextView findContaining(View root,String text){
+        if(root instanceof TextView&&((TextView)root).getText().toString().contains(text))return (TextView)root;
+        if(root instanceof ViewGroup){ViewGroup g=(ViewGroup)root;for(int i=0;i<g.getChildCount();i++){TextView f=findContaining(g.getChildAt(i),text);if(f!=null)return f;}}return null;
+    }
 }

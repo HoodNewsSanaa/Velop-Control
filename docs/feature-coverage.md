@@ -1,4 +1,4 @@
-# Feature coverage — 0.4.0
+# Feature coverage — 0.6.0
 
 38 setting pages: 28 guarded editors, 7 information pages and 3 explicitly unavailable workflows. Additional node actions and diagnostics are described below.
 
@@ -42,7 +42,7 @@ An editor means the form and request pipeline exist. It does not mean a write ha
 | Network | Dynamic DNS | Read-only information |
 | Network | Dynamic DNS status | Read-only information |
 | Wireless | Manual parent selection | Unavailable; explanation included |
-| Administration | Add or remove mesh nodes | Unavailable; explanation included |
+| Administration | Add mesh nodes | Setup wizard (stock auto-onboarding); node removal unavailable |
 | Administration | Full configuration backup & restore | Unavailable; explanation included |
 
 ## Navigation and monitoring
