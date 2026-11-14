@@ -1,3 +1,13 @@
+Velop Control 0.6.2 — neighbor signals & steering
+
+- New **Nodes → Neighbor signals & steering…** (also under Tools). Reads the primary's neighbor report (nodes/diagnostics/GetNodeNeighborInfo) and shows, for every node, how strongly it hears each other node's radios, with channel and band.
+- Each node gets a verdict using the stock firmware's steering rules with default settings: an uplink at or above −60 dBm is left alone; otherwise the node is moved when another node is more than 10 dB stronger, or when the strongest is the primary. Children and 2.4 GHz radios are ignored, as the firmware does. This explains why a node stays on a farther parent.
+- Radio BSSIDs are matched to nodes by exact MAC where known, otherwise by unique nearby address (labelled "matched by address"); unidentified radios are listed as such.
+- Shows each directly connected node's radio transmit-power setting and power-table region. Both reads were also added to node diagnostics and sequential validation.
+- All additions are read-only.
+
+109 automated tests pass; Android lint reports 0 errors. Hardware validation is pending.
+
 Velop Control 0.6.1 — accurate mesh diagram
 
 - Node parents now come from the mesh backhaul report (the firmware's bh_report), with the device inventory's last-seen parent only as a fallback. Previously the inventory value took priority, which could attach nodes to the wrong parent. Node details show which source was used.

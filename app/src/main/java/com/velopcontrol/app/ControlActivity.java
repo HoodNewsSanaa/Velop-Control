@@ -244,7 +244,7 @@ public final class ControlActivity extends Activity {
         ui.note(page,"Connection counts and signals are firmware snapshots. Missing values stay unknown; wireless throughput is a past child-to-parent test, not an internet speed test.");
     }
     private void nodes(){
-        ui.action(page,"Add mesh nodes…",true,this::onboardingScreen);
+        ui.action(page,"Add mesh nodes…",true,this::onboardingScreen);ui.action(page,"Neighbor signals & steering…",false,this::neighborSignals);
         ui.text(page,"Tap a node for its parent, firmware and attached devices.",14,ui.muted);List<View> cards=new ArrayList<>();
         for(Topology.Node n:topology.nodes){LinearLayout card=ui.card();ui.text(card,n.primary?"PRIMARY MESH NODE":"MESH NODE",11,ui.accent);ui.heading(card,n.name);ui.text(card,Ui.known(n.ip)+" · "+Ui.known(n.model),14,ui.text);
             ui.text(card,(n.seen?"Reported in snapshot":"Status not reported")+" · "+(n.primary?"Mesh coordinator":Ui.known(n.link)),13,ui.muted);
@@ -341,7 +341,7 @@ public final class ControlActivity extends Activity {
         ui.action(app,"View connection history",false,()->showHistory(null));ui.action(app,"Clear local history",false,()->ui.dialog("Clear connection history?").setNegativeButton("Keep",null).setPositiveButton("Clear",(d,w)->task("Clearing local history…",()->{history.clear();return true;},r->toast("Local history cleared"))).show());Switch remembered=ui.toggle("Remember passwords on this device",preferences.getBoolean("remember",true));app.addView(remembered);remembered.setOnCheckedChangeListener((button,on)->{preferences.edit().putBoolean("remember",on).apply();if(!on)vault.forgetAll();});
         ui.action(app,"Forget saved passwords",false,()->ui.dialog("Forget saved passwords?").setMessage("Current sessions stay connected. You will need the passwords on your next connection.").setNegativeButton("Keep",null).setPositiveButton("Forget",(d,w)->{vault.forgetAll();toast("Saved passwords removed");}).show());
         ui.action(app,"App updates",false,this::updates);page.addView(app);
-        LinearLayout diagnostics=ui.card();ui.heading(diagnostics,"Network tools");ui.action(diagnostics,"Add mesh nodes…",false,this::onboardingScreen);ui.action(diagnostics,"Ping from selected router",false,this::ping);ui.action(diagnostics,"Optimize wireless channels…",false,this::optimize);ui.action(diagnostics,"Change local admin password…",false,this::changePassword);ui.action(diagnostics,"API capability results",false,this::capabilities);page.addView(diagnostics);
+        LinearLayout diagnostics=ui.card();ui.heading(diagnostics,"Network tools");ui.action(diagnostics,"Add mesh nodes…",false,this::onboardingScreen);ui.action(diagnostics,"Neighbor signals & steering…",false,this::neighborSignals);ui.action(diagnostics,"Ping from selected router",false,this::ping);ui.action(diagnostics,"Optimize wireless channels…",false,this::optimize);ui.action(diagnostics,"Change local admin password…",false,this::changePassword);ui.action(diagnostics,"API capability results",false,this::capabilities);page.addView(diagnostics);
         LinearLayout about=ui.card();ui.heading(about,"Velop Control "+BuildConfig.VERSION_NAME);ui.text(about,"Independent Android client for stock Linksys mesh routers. Local JNAP over pinned HTTPS. GitHub is contacted only for app updates. No advertisements, WebView or separate backend.",14,ui.muted);ui.text(about,"Read support is firmware-dependent. Manual parent locking, node removal, full backup/restore and cloud subscription features are unavailable in this build.",13,ui.muted);ui.action(about,"Disconnect",false,()->{disconnect();login("");});page.addView(about);
     }
     private String onboardingKey(JnapClient session){return "onboardingPending:"+session.host();}
@@ -416,7 +416,7 @@ public final class ControlActivity extends Activity {
     private void validateAll(){
         if(topology.demo||primary==null){message("Connect to your mesh","Validation needs a local router session.");return;}if(busy){toast("Wait for the current operation");return;}
         audit=new AuditReport();cancelled=false;validating=true;main.removeCallbacks(poll);setBusy(true,"Starting sequential read-only validation…");showTab();int ticket=generation;List<JnapClient> targets=new ArrayList<>(sessions.values());
-        List<String> actions=new ArrayList<>(Arrays.asList(ReadPolicy.INFO,ReadPolicy.DEVICES,ReadPolicy.BACKHAUL,ReadPolicy.NODE_CONNECTIONS,ReadPolicy.CONNECTIONS,ReadPolicy.MODE,"diagnostics/GetSystemStats","nodes/setup/GetSelectedChannels","router/GetEthernetPortConnections"));for(SettingsCatalog.Spec s:SettingsCatalog.ALL)if(!s.read.isEmpty()&&!actions.contains(s.read))actions.add(s.read);
+        List<String> actions=new ArrayList<>(Arrays.asList(ReadPolicy.INFO,ReadPolicy.DEVICES,ReadPolicy.BACKHAUL,ReadPolicy.NODE_CONNECTIONS,ReadPolicy.CONNECTIONS,ReadPolicy.MODE,"diagnostics/GetSystemStats","nodes/setup/GetSelectedChannels","router/GetEthernetPortConnections",NeighborSignals.ACTION,"wirelessap/GetAdvancedRadioInfo","powertable/GetPowerTableSettings"));for(SettingsCatalog.Spec s:SettingsCatalog.ALL)if(!s.read.isEmpty()&&!actions.contains(s.read))actions.add(s.read);
         final AuditReport report=audit;final Map<String,String> checked=new HashMap<>();
         worker.execute(()->{int index=0;
             for(JnapClient target:targets){String alias="Node "+(++index);boolean rejected=false;
@@ -432,9 +432,57 @@ public final class ControlActivity extends Activity {
             main.post(()->{if(ticket!=generation||isDestroyed())return;validating=false;setBusy(false,"");pageStatus.putAll(checked);notice=(cancelled?"Validation stopped. ":"Validation finished. ")+report.summary();back=null;tab="Tools";showTab();schedule();});
         });
     }
+    private static final class SignalsRead {
+        final List<NeighborSignals.Report> reports;final Map<String,String> radios;
+        SignalsRead(List<NeighborSignals.Report> reports,Map<String,String> radios){this.reports=reports;this.radios=radios;}
+    }
+    /** Read-only: the primary's neighbor report, plus radio power and region from each connected node. */
+    private void neighborSignals(){
+        if(topology==null)return;
+        if(topology.demo){showSignals(NeighborSignals.parse(NeighborSignals.demo(topology),topology),new LinkedHashMap<>());return;}
+        if(primary==null){message("Connect first","Neighbor signals are read from the primary node.");return;}
+        JnapClient session=primary;Topology snapshot=topology;List<JnapClient> targets=new ArrayList<>(sessions.values());
+        task("Reading what each node hears…",()->{
+            List<NeighborSignals.Report> reports=NeighborSignals.parse(session.read(NeighborSignals.ACTION,true),snapshot);
+            Map<String,String> radios=new LinkedHashMap<>();for(JnapClient c:targets)radios.put(c.host(),radioSummary(c));
+            return new SignalsRead(reports,radios);
+        },r->showSignals(r.reports,r.radios));
+    }
+    static String radioSummary(JnapClient c) throws Exception {
+        StringBuilder b=new StringBuilder();
+        try{JSONObject r=c.read("wirelessap/GetAdvancedRadioInfo",true);SettingsRepository.requireOK(r);
+            for(JSONObject radio:Topology.entries(Topology.object(r,"output"),"radios")){String power=Topology.object(radio,"settings").optString("transmissionPower");
+                b.append(Topology.radioLabel(radio.optString("radioID"))).append(" power: ").append(power.matches("[A-Za-z]{1,20}")?power:"Not reported").append('\n');}
+        }catch(SecurityException e){throw e;}catch(Exception e){b.append("Radio power: not available on this firmware\n");}
+        try{JSONObject r=c.read("powertable/GetPowerTableSettings",true);SettingsRepository.requireOK(r);JSONObject o=Topology.object(r,"output");String country=o.optString("country");
+            b.append("Power-table region: ").append(country.matches("[A-Za-z]{2,3}")?country:"Not set").append(o.optBoolean("isPowerTableSelectable")?" (selectable)":" (fixed)");
+        }catch(SecurityException e){throw e;}catch(Exception e){b.append("Power-table region: not available on this firmware");}
+        return b.toString().trim();
+    }
+    private void showSignals(List<NeighborSignals.Report> reports,Map<String,String> radios){
+        detail("Neighbor signals",this::showTab);
+        ui.note(page,"How strongly each node hears the others on its radios, from the primary's neighbor report. The verdict applies the stock steering rules with default settings: an uplink at or above −60 dBm is left alone; otherwise the node moves when another node is more than 10 dB stronger, or when the strongest is the primary. Children and 2.4 GHz radios are ignored. Checks run about hourly or after a restart.");
+        if(reports.isEmpty())ui.note(page,"The primary returned an empty neighbor report. Nodes publish it after their periodic scan; try again later or after restarting a node.");
+        for(NeighborSignals.Report r:reports){
+            LinearLayout card=ui.card();Topology.Node n=r.node;ui.heading(card,n==null?"Node not in inventory":n.name);
+            if(n!=null&&!n.primary)ui.text(card,"Uplink: "+(n.parentId==null?"parent not reported":topology.nodeName(n.parentId))+" · "+Ui.known(n.link)+(n.rssi==null||n.rssi.isEmpty()?"":" · "+n.rssi+" dBm"),13,ui.muted);
+            ui.text(card,r.verdict,14,r.attention?ui.warning:ui.accent);
+            if(r.heard.isEmpty())ui.text(card,"No neighboring node radios reported.",13,ui.muted);
+            int shown=0;for(NeighborSignals.Heard h:r.heard){if(++shown>12)break;
+                String who=h.node==null?"Unidentified mesh radio ··"+h.bssid.substring(11):h.node.name+(h.exact?"":" (matched by address)");
+                boolean child=n!=null&&!n.primary&&"Wireless".equalsIgnoreCase(n.link)&&h.node!=null&&n.id.equals(h.node.parentId);
+                ui.text(card,who+" · "+h.rssi+" dBm · "+h.band()+(h.ignoredBand()?" · ignored by steering":"")+(child?" · its child, ignored":""),13,ui.text);}
+            page.addView(card);
+        }
+        LinearLayout power=ui.card();ui.heading(power,"Radio power & region");
+        if(topology.demo)ui.text(power,"Demo: connect to read each node's radio power setting and power-table region.",13,ui.muted);
+        for(Map.Entry<String,String> e:radios.entrySet()){String name=e.getKey();for(Topology.Node n:topology.nodes)if(e.getKey().equals(n.ip))name=n.name+" · "+e.getKey();ui.text(power,name,14,ui.text);ui.text(power,e.getValue(),13,ui.muted);}
+        ui.text(power,"Only nodes with a direct session are read. Connect directly to other nodes from their page to include them. Wi-Fi radio settings are shared from the primary; the power-table region caps each node's maximum power.",12,ui.muted);
+        page.addView(power);
+    }
     private void nodeDiagnostics(Topology.Node node,JnapClient session){
         task("Reading diagnostics for "+node.name+"…",()->{
-            Map<String,JSONObject> data=new LinkedHashMap<>();for(String a:new String[]{ReadPolicy.INFO,ReadPolicy.MODE,"diagnostics/GetSystemStats","router/GetEthernetPortConnections","nodes/setup/GetSelectedChannels"}){try{data.put(a,session.read(a,!a.equals(ReadPolicy.INFO)));}catch(SecurityException e){throw e;}catch(Exception e){data.put(a,new JSONObject().put("result","Unavailable"));}}return data;
+            Map<String,JSONObject> data=new LinkedHashMap<>();for(String a:new String[]{ReadPolicy.INFO,ReadPolicy.MODE,"diagnostics/GetSystemStats","router/GetEthernetPortConnections","nodes/setup/GetSelectedChannels","wirelessap/GetAdvancedRadioInfo","powertable/GetPowerTableSettings"}){try{data.put(a,session.read(a,!a.equals(ReadPolicy.INFO)));}catch(SecurityException e){throw e;}catch(Exception e){data.put(a,new JSONObject().put("result","Unavailable"));}}return data;
         },data->{detail(node.name+" diagnostics",()->node(node));for(Map.Entry<String,JSONObject> e:data.entrySet()){LinearLayout card=ui.card();ui.heading(card,Json.label(e.getKey().substring(e.getKey().lastIndexOf('/')+1).replaceFirst("^Get","")));key(card,"Result",SettingsRepository.safeCode(e.getValue().optString("result")));showSafeValues(card,e.getValue().optJSONObject("output"),0);page.addView(card);}});
     }
     private void wiredNeighbors(Topology.Node node,JnapClient session){

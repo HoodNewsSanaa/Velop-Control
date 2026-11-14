@@ -17,6 +17,8 @@ public final class Topology {
         public boolean primary, seen, wirelessGroupReported;
         public String reportedParentId, parentSource="", radio="", channel="", backhaulTimestamp="", linkRate="", linkRateTimestamp="", linkRateSource="", stationMac="", apMac="";
         public int clients;
+        /** Every MAC/BSSID this node is known by (inventory interfaces, backhaul reports, client AP BSSIDs). */
+        public final Set<String> macs = new LinkedHashSet<>();
     }
     public static final class Client {
         public String name, ip, mac, nodeId, type, rssi, rate, timestamp;
@@ -91,6 +93,9 @@ public final class Topology {
             node.radio=value(wireless,"radioID");node.channel=value(wireless,"channel");if(node.channel.equals("0"))node.channel="";node.backhaulTimestamp=value(b,"timestamp");
             node.stationMac=mac(value(wireless,"stationBSSID"));node.apMac=mac(value(wireless,"apBSSID"));
             if("Wired".equalsIgnoreCase(node.link))node.rate=""; // bh_report hard-codes 1024 for wired links.
+            List<JSONObject> known = new ArrayList<>(connections); known.addAll(entries(device,"knownInterfaces"));
+            for (JSONObject iface : known) addMac(node, value(iface,"macAddress"));
+            addMac(node, node.stationMac);
             // Index every address a node is known by: inventory interfaces and the backhaul report.
             for (JSONObject c : connections) { String ip = value(c,"ipAddress"); if (!ip.isEmpty()) nodeByIp.putIfAbsent(ip,node.id); }
             if (!value(b,"ipAddress").isEmpty()) nodeByIp.put(value(b,"ipAddress"),node.id);
@@ -106,6 +111,8 @@ public final class Topology {
             else if (byId.containsKey(explicitParent) && !explicitParent.equals(n.id)) { n.parentId = explicitParent; n.parentSource = "Device inventory (fallback)"; }
             else n.parentId = null;
             if (n.primary) { n.parentId = null; n.parentSource = ""; }
+            // The AP BSSID a wireless child is associated with belongs to its backhaul parent.
+            if (n.parentId != null && "Backhaul report".equals(n.parentSource)) for (Node p : t.nodes) if (p.id.equals(n.parentId)) addMac(p, n.apMac);
             n.reportedParentId=n.parentId;
             if (n.primary) {
                 if (n.firmware.isEmpty()) n.firmware = value(identity,"firmwareVersion");
@@ -121,6 +128,8 @@ public final class Topology {
         for (JSONObject group : entries(output(raw, ReadPolicy.NODE_CONNECTIONS),"nodeWirelessConnections")) {
             for(Node n:t.nodes)if(n.id.equals(value(group,"deviceID")))n.wirelessGroupReported=true;
             for (JSONObject c : entries(group,"connections")) {
+                String bssid = value(object(c,"wireless"),"bssid");
+                if (!bssid.isEmpty()) for (Node n : t.nodes) if (n.id.equals(value(group,"deviceID"))) addMac(n, bssid);
                 String m = mac(value(c,"macAddress"));
                 if (!m.isEmpty()) { liveByMac.put(m,c); association.put(m,value(group,"deviceID"));
                     wirelessByParent.computeIfAbsent(value(group,"deviceID"),k->new HashMap<>()).put(m,c); }
@@ -173,6 +182,10 @@ public final class Topology {
         return t;
     }
 
+    private static void addMac(Node node, String value) {
+        String m = mac(value);
+        if (m.matches("[0-9A-F]{2}(:[0-9A-F]{2}){5}") && !m.equals("00:00:00:00:00:00")) node.macs.add(m);
+    }
     private static void setBackhaulRate(Node n,JSONObject c,String source){
         if(!mac(value(c,"macAddress")).equals(n.stationMac)||!mac(value(object(c,"wireless"),"bssid")).equals(n.apMac))return;
         String rate=positiveRate(value(c,"negotiatedMbps"));if(rate.isEmpty())return;
@@ -203,7 +216,7 @@ public final class Topology {
             n.reportedParentId=n.parentId;n.radio=i==2?"5GL":i==4?"5GH":"";n.channel=i==2?"44":i==4?"161":"";
             n.parentIp=i==0?"":"192.168.1."+(i<3?10:11);
             n.link=i==2||i==4?"Wireless":"Wired"; n.model="MX4200";
-            n.rssi=i==2?"-57":i==4?"-68":""; n.rate=""; n.firmware="Demo";n.wirelessGroupReported=true;
+            n.rssi=i==2?"-57":i==4?"-68":""; n.rate=""; n.firmware="Demo";n.wirelessGroupReported=true;n.macs.add(String.format(Locale.ROOT,"02:00:00:00:%02X:10",i));if(n.parentId!=null)n.parentSource="Demo";
             t.nodes.add(n);
         }
         String[] clients={"Pixel phone","Work laptop","Living room TV","Kitchen speaker","Android tablet","Game console","Patio camera","Desktop PC","Home server","Bedroom light","Printer","Watch"};

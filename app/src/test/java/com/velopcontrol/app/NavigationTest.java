@@ -62,4 +62,13 @@ public class NavigationTest {
         click("Find my primary Velop");
         assertNotNull(find(root(),"Connect once to your primary Velop. After that, the app finds it automatically, even if its address changes."));
     }
+    @Test public void neighborSignalsExplainSteeringInDemo() throws Exception {
+        click("Explore demo");click("Nodes");click("Neighbor signals & steering…");
+        assertNotNull(find(root(),"Neighbor signals"));assertNotNull(find(root(),"Radio power & region"));
+        assertTrue(findContaining(root(),"should move it there")!=null);screenshot("neighbor-signals-phone");
+    }
+    private TextView findContaining(View root,String text){
+        if(root instanceof TextView&&((TextView)root).getText().toString().contains(text))return (TextView)root;
+        if(root instanceof ViewGroup){ViewGroup g=(ViewGroup)root;for(int i=0;i<g.getChildCount();i++){TextView f=findContaining(g.getChildAt(i),text);if(f!=null)return f;}}return null;
+    }
 }

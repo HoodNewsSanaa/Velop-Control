@@ -1,10 +1,10 @@
-# Velop Control 0.6.1
+# Velop Control 0.6.2
 
 Standalone Android app for stock Linksys Intelligent Mesh routers. Android 8.0+; native phone and tablet layouts; no WebView, Linksys account or separate backend. The first installable build is a development preview, with management controls off by default.
 
 ## Install and first test
 
-Download the APK from [the v0.6.1 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.6.1), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
+Download the APK from [the v0.6.2 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.6.2), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
 
 Next, while on the local Wi-Fi, connect to the **primary Velop’s** address (on first use the field suggests your Wi-Fi gateway, which is the primary in router mode) and enter its local admin password. In bridge mode, use the Velop’s assigned address rather than the OpenWrt/OPNsense gateway. Approve the local HTTPS certificate only after checking the address on a trusted network. The app pins its SHA-256 fingerprint. Successful passwords are remembered by default, encrypted on-device with Android Keystore; this can be disabled or cleared in Tools.
 
@@ -89,6 +89,10 @@ Automatic setup may enroll multiple eligible unconfigured nodes; power only the 
 ## Changes in 0.6.0
 
 Automatic primary discovery and per-build certificate handling, described below. **98 automated tests pass** and Android lint reports **0 errors**. The permanent signing certificate is unchanged for in-place updates from 0.3.0–0.5.0.
+
+## Changes in 0.6.2
+
+**Nodes → Neighbor signals & steering…** shows how strongly each node hears the others and predicts, using the stock steering rules (−60 dBm adequacy threshold, more than 10 dB margin, children and 2.4 GHz ignored), whether the firmware will move it. It also shows each connected node's radio power setting and power-table region. Read-only. **109 automated tests pass** and Android lint reports **0 errors**.
 
 ## Changes in 0.6.1
 
