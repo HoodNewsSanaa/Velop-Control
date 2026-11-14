@@ -462,7 +462,11 @@ public final class ControlActivity extends Activity {
     private void showSignals(List<NeighborSignals.Report> reports,Map<String,String> radios){
         detail("Neighbor signals",this::showTab);
         ui.note(page,"How strongly each node hears the others on its radios, from the primary's neighbor report. The verdict applies the stock steering rules with default settings: an uplink at or above −60 dBm is left alone; otherwise the node moves when another node is more than 10 dB stronger, or when the strongest is the primary. Children and 2.4 GHz radios are ignored. Checks run about hourly or after a restart.");
-        if(reports.isEmpty())ui.note(page,"The primary returned an empty neighbor report. Nodes publish it after their periodic scan; try again later or after restarting a node.");
+        List<Topology.Node> silent=NeighborSignals.missing(reports,topology);
+        if(!silent.isEmpty()){LinearLayout card=ui.card();ui.heading(card,"No report yet from "+silent.size()+" node"+(silent.size()>1?"s":""));
+            for(Topology.Node n:silent)ui.text(card,n.name+(n.seen?"":" · not currently reported in the mesh"),14,ui.text);
+            ui.text(card,"A node sends this report about hourly (scan, then about 5 minutes later) and whenever its Wi-Fi starts, but only while node steering is on under Settings → Automatic mesh steering. The primary keeps reports in memory, so they are lost when the primary restarts. Restart the missing node, wait a few minutes, then reopen this page.",13,ui.muted);
+            page.addView(card);}
         for(NeighborSignals.Report r:reports){
             LinearLayout card=ui.card();Topology.Node n=r.node;ui.heading(card,n==null?"Node not in inventory":n.name);
             if(n!=null&&!n.primary)ui.text(card,"Uplink: "+(n.parentId==null?"parent not reported":topology.nodeName(n.parentId))+" · "+Ui.known(n.link)+(n.rssi==null||n.rssi.isEmpty()?"":" · "+n.rssi+" dBm"),13,ui.muted);

@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag matching app version (for example v0.6.2)'
+        description: 'Release tag matching app version (for example v0.6.3)'
         required: true
-        default: 'v0.6.2'
+        default: 'v0.6.3'
 permissions:
   contents: write
 jobs:
