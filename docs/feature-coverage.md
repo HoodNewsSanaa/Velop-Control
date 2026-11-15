@@ -64,6 +64,7 @@ An editor means the form and request pipeline exist. It does not mean a write ha
 
 - **Channel finder:** shows every node radio's channel, runs the stock auto-channel selection once, follows progress and highlights changed channels and DFS channels.
 - **Speed check:** runs the router's built-in Speedtest by Ookla on the primary, follows progress and shows download/upload/latency plus the router's stored history. Speeds are shown as Mbps assuming the firmware stores kbit/s.
+- **Restart whole network:** restarting the primary makes the firmware reboot every child node (farthest first). Software restart only; settings kept; modem/main router untouched.
 - **Traceroute**, **WPS push-button pairing**, **firmware check / install now** (stock update service), **router log viewer** (incoming, outgoing, security, DHCP) with clear, and **removing offline devices** from the device list.
 - Node and client steering are on the Automatic mesh steering page; the firmware has no further steering settings.
 - Not included on purpose: factory reset, node removal and restoring previous firmware (irreversible); node "blink" exists in firmware only for unconfigured nodes during setup; cloud notifications need Linksys cloud services.

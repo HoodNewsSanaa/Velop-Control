@@ -76,4 +76,13 @@ public class NavigationTest {
         assertNotNull(find(root(),"Channel finder"));assertNotNull(findContaining(root(),"was 100"));screenshot("channel-finder-phone");
         click("‹ Back");click("Speed check…");assertNotNull(find(root(),"Speed check"));
     }
+    @Test public void connectionMonitorScreenOffersTimedRuns() throws Exception {
+        click("Explore demo");click("Tools");click("Connection drop monitor…");
+        assertNotNull(find(root(),"Connection monitor"));assertNotNull(find(root(),"Monitor for 1 hour"));assertNotNull(find(root(),"Monitor for 2 hours"));
+        assertNotNull(find(root(),"Allow location for node tracking…"));screenshot("connection-monitor-phone");
+    }
+    @Test public void restartWholeNetworkIsOfferedInTools(){
+        click("Explore demo");click("Tools");click("Restart whole network…");
+        AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();assertNotNull(dialog);assertTrue(dialog.isShowing());
+    }
 }
