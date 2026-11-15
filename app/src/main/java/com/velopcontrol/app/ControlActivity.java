@@ -347,7 +347,7 @@ public final class ControlActivity extends Activity {
         ui.action(app,"View connection history",false,()->showHistory(null));ui.action(app,"Clear local history",false,()->ui.dialog("Clear connection history?").setNegativeButton("Keep",null).setPositiveButton("Clear",(d,w)->task("Clearing local history…",()->{history.clear();return true;},r->toast("Local history cleared"))).show());Switch remembered=ui.toggle("Remember passwords on this device",preferences.getBoolean("remember",true));app.addView(remembered);remembered.setOnCheckedChangeListener((button,on)->{preferences.edit().putBoolean("remember",on).apply();if(!on)vault.forgetAll();});
         ui.action(app,"Forget saved passwords",false,()->ui.dialog("Forget saved passwords?").setMessage("Current sessions stay connected. You will need the passwords on your next connection.").setNegativeButton("Keep",null).setPositiveButton("Forget",(d,w)->{vault.forgetAll();toast("Saved passwords removed");}).show());
         ui.action(app,"App updates",false,this::updates);page.addView(app);
-        LinearLayout diagnostics=ui.card();ui.heading(diagnostics,"Network tools");ui.action(diagnostics,"Add mesh nodes…",false,this::onboardingScreen);ui.action(diagnostics,"Neighbor signals & steering…",false,this::neighborSignals);ui.action(diagnostics,"Ping from selected router",false,this::ping);ui.action(diagnostics,"Channel finder…",false,this::channelFinder);ui.action(diagnostics,"Speed check…",false,this::speedCheck);ui.action(diagnostics,"Traceroute from selected router",false,this::traceroute);ui.action(diagnostics,"WPS pairing…",false,this::wpsPairing);ui.action(diagnostics,"Firmware update…",false,this::firmwareUpdate);ui.action(diagnostics,"Router logs…",false,this::routerLogs);ui.action(diagnostics,"Change local admin password…",false,this::changePassword);ui.action(diagnostics,"API capability results",false,this::capabilities);page.addView(diagnostics);
+        LinearLayout diagnostics=ui.card();ui.heading(diagnostics,"Network tools");ui.action(diagnostics,"Connection drop monitor…",false,this::monitorScreen);ui.action(diagnostics,"Add mesh nodes…",false,this::onboardingScreen);ui.action(diagnostics,"Neighbor signals & steering…",false,this::neighborSignals);ui.action(diagnostics,"Ping from selected router",false,this::ping);ui.action(diagnostics,"Channel finder…",false,this::channelFinder);ui.action(diagnostics,"Speed check…",false,this::speedCheck);ui.action(diagnostics,"Traceroute from selected router",false,this::traceroute);ui.action(diagnostics,"WPS pairing…",false,this::wpsPairing);ui.action(diagnostics,"Firmware update…",false,this::firmwareUpdate);ui.action(diagnostics,"Router logs…",false,this::routerLogs);ui.action(diagnostics,"Change local admin password…",false,this::changePassword);ui.action(diagnostics,"API capability results",false,this::capabilities);page.addView(diagnostics);
         LinearLayout about=ui.card();ui.heading(about,"Velop Control "+BuildConfig.VERSION_NAME);ui.text(about,"Independent Android client for stock Linksys mesh routers. Local JNAP over pinned HTTPS. GitHub is contacted only for app updates. No advertisements, WebView or separate backend.",14,ui.muted);ui.text(about,"Read support is firmware-dependent. Manual parent locking, node removal, full backup/restore and cloud subscription features are unavailable in this build.",13,ui.muted);ui.action(about,"Disconnect",false,()->{disconnect();login("");});page.addView(about);
     }
     private String onboardingKey(JnapClient session){return "onboardingPending:"+session.host();}
@@ -796,6 +796,55 @@ public final class ControlActivity extends Activity {
         confirm("Remove "+c.name+"?","Removes this offline device and its custom name from the router's device list, like the stock app. If it connects again it reappears as a new device.",false,()->
             task("Removing device…",()->{SettingsRepository.requireOK(s.write(NetworkTools.DELETE_DEVICE,new JSONObject().put("deviceID",c.id)));return true;},r->{back=null;tab="Devices";refresh();message("Device removed",c.name+" was removed from the router's device list.");}));
     }
+
+    // ---- Connection drop monitor -------------------------------------------------------------------
+    private final Runnable monitorTick=()->{if("monitor".equals(screenKey)&&resumed)monitorScreen();};
+    private boolean hasLocation(){return checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)==android.content.pm.PackageManager.PERMISSION_GRANTED;}
+    private void monitorScreen(){
+        detail("Connection monitor",this::showTab);screenKey="monitor";main.removeCallbacks(monitorTick);
+        ui.note(page,"Records your phone's connection every 5 seconds in the background, with a notification, and stops by itself. Each check covers: Wi-Fi state, which node you are on, signal, and whether your main router, the primary Velop, the internet and DNS answer, all over Wi-Fi only. Afterwards it lists every drop and which part failed first. No passwords or router settings are used.");
+        ui.note(page,"For complete results keep the phone charging and Wi-Fi on. If Android pauses the app anyway, the gap is marked as a pause, not counted as a drop.");
+        if(MonitorService.running){
+            LinearLayout card=ui.card();ui.heading(card,"Monitoring");key(card,"Started",DropMonitor.time(MonitorService.startedAt));key(card,"Stops at",DropMonitor.time(MonitorService.endsAt));
+            key(card,"Checks so far",String.valueOf(MonitorService.samples));key(card,"Drops so far",String.valueOf(MonitorService.problems));page.addView(card);
+            ui.action(page,"Stop monitoring",true,()->{startService(new Intent(this,MonitorService.class).setAction(MonitorService.ACTION_STOP));main.postDelayed(this::monitorScreen,500);});
+            main.postDelayed(monitorTick,15000);
+        }else{
+            ui.action(page,"Monitor for 1 hour",true,()->startMonitor(60));ui.action(page,"Monitor for 2 hours",false,()->startMonitor(120));ui.action(page,"Monitor for 4 hours",false,()->startMonitor(240));
+        }
+        if(!hasLocation()){LinearLayout card=ui.card();ui.heading(card,"Which node am I on?");
+            ui.text(card,"Android only reveals the access point's address to apps with location permission. Allow it to record which node your phone is connected to and when it switches. Location is not stored or used for anything else, and the monitor works without it.",13,ui.muted);
+            ui.action(card,"Allow location for node tracking…",false,()->requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION,android.Manifest.permission.ACCESS_COARSE_LOCATION},72));page.addView(card);}
+        java.io.File log=MonitorService.file(this);
+        if(!log.isFile()){ui.note(page,"No log recorded yet.");return;}
+        List<DropMonitor.Sample> samples=new ArrayList<>();
+        try(java.io.BufferedReader r=new java.io.BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(log),StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null){DropMonitor.Sample x=DropMonitor.parse(line);if(x!=null)samples.add(x);}}catch(java.io.IOException e){ui.note(page,"The log could not be read.");return;}
+        DropMonitor.Report report=DropMonitor.analyse(samples,MonitorService.INTERVAL_MS,this::nodeForBssid);
+        LinearLayout summary=ui.card();ui.heading(summary,MonitorService.running?"Results so far":"Last session");ui.text(summary,DropMonitor.summary(report,MonitorService.INTERVAL_MS),14,report.outages>0?ui.warning:ui.accent);page.addView(summary);
+        List<DropMonitor.Event> events=new ArrayList<>(report.events);Collections.reverse(events);int shown=0;
+        for(DropMonitor.Event e:events){if(++shown>100)break;LinearLayout card=ui.card();
+            ui.text(card,DropMonitor.time(e.start)+(e.end>e.start?" – "+DropMonitor.time(e.end)+" ("+DropMonitor.duration(e.seconds())+")":""),12,ui.muted);
+            ui.text(card,e.kind,15,e.problem?ui.warning:ui.text);ui.text(card,e.detail,13,ui.text);page.addView(card);}
+        if(report.samples>0){
+            ui.action(page,"Export log (CSV)",false,()->{try{export(new String(java.nio.file.Files.readAllBytes(log.toPath()),StandardCharsets.UTF_8)+"# "+DropMonitor.summary(report,MonitorService.INTERVAL_MS)+"\n","Velop-Connection-Monitor-"+new java.text.SimpleDateFormat("yyyyMMdd-HHmm",Locale.ROOT).format(new Date(samples.get(0).time))+".csv","text/csv");}catch(java.io.IOException e){message("Export failed","The log could not be read.");}});
+            if(!MonitorService.running)ui.action(page,"Delete log",false,()->{if(log.delete())toast("Log deleted");monitorScreen();});
+        }
+    }
+    private void startMonitor(int minutes){
+        if(MonitorService.running)return;
+        PrimaryLocator.LocalNetwork network=localNetwork();
+        if(network.address.isEmpty()){message("Connect to Wi-Fi","Join your home Wi-Fi first. The monitor checks the Wi-Fi network your phone is on.");return;}
+        String velop=primary!=null?primary.host():preferences.getString("lastHost","");
+        if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},71);
+        Intent intent=new Intent(this,MonitorService.class).putExtra(MonitorService.EXTRA_MINUTES,minutes).putExtra(MonitorService.EXTRA_GATEWAY,network.gateway).putExtra(MonitorService.EXTRA_PRIMARY,velop);
+        startForegroundService(intent);toast("Connection monitor started for "+(minutes/60)+(minutes==60?" hour":" hours"));main.postDelayed(this::monitorScreen,800);
+    }
+    /** Node name for a phone-side BSSID, using the latest mesh snapshot. */
+    private String nodeForBssid(String bssid){
+        if(topology==null||bssid.isEmpty())return null;
+        for(Topology.Node n:topology.nodes)if(n.macs.contains(bssid))return n.name;
+        Topology.Node near=NeighborSignals.nearby(topology,bssid);return near==null?null:near.name;
+    }
     private void changePassword(){
         if(!controls())return;JnapClient session=selected();if(session==null){message("Select a node","Choose a connected target in Settings.");return;}LinearLayout body=ui.column();body.setPadding(ui.d(22),0,ui.d(22),0);EditText next=ui.input("New local admin password","",true),again=ui.input("Repeat password","",true),hint=ui.input("Password hint (optional)","",false);body.addView(next);body.addView(again);body.addView(hint);
         AlertDialog d=ui.dialog("Change local password").setMessage("Target "+session.host()+". Changes apply asynchronously; reconnect afterward to verify and remember the new password. "+(session.modernPasswords()?"Use 10–64 printable ASCII characters, uppercase, lowercase, a number and a symbol; no identical consecutive characters.":"This firmware uses the older password policy.")).setView(body).setNegativeButton("Cancel",null).setPositiveButton("Review",null).create();
@@ -819,8 +868,10 @@ public final class ControlActivity extends Activity {
         LinearLayout body=ui.column();body.setPadding(ui.d(22),ui.d(8),ui.d(22),0);ui.text(body,text,14,ui.text);EditText word=ui.input("Type APPLY to confirm","",false);if(disruptive)body.addView(word);ScrollView scroll=new ScrollView(this);scroll.addView(body);
         AlertDialog d=ui.dialog(title).setView(scroll).setNegativeButton("Cancel",(x,w)->cancelledAction.run()).setPositiveButton(disruptive?"Apply once":"Confirm",null).setOnCancelListener(x->cancelledAction.run()).create();d.setOnShowListener(v->d.getButton(-1).setOnClickListener(b->{if(disruptive&&!word.getText().toString().equals("APPLY")){word.setError("Type APPLY to continue");return;}if(!management){cancelledAction.run();d.dismiss();message("Controls disabled","Enable management controls before submitting a change.");return;}d.dismiss();action.run();}));d.show();
     }
-    private void export(String text,String name){if(busy){toast("Finish or stop validation before exporting");return;}exportText=text;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.setType("application/json");intent.addCategory(Intent.CATEGORY_OPENABLE);intent.putExtra(Intent.EXTRA_TITLE,name);startActivityForResult(intent,70);}
-    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==70&&result==RESULT_OK&&data!=null&&data.getData()!=null&&exportText!=null){String content=exportText;exportText=null;Uri uri=data.getData();task("Writing diagnostic log…",()->{try(java.io.OutputStream output=getContentResolver().openOutputStream(uri,"wt")){if(output==null)throw new java.io.IOException();output.write(content.getBytes(StandardCharsets.UTF_8));}return true;},r->toast("Diagnostic log saved"));}else exportText=null;}
+    private void export(String text,String name){export(text,name,"application/json");}
+    private void export(String text,String name,String mime){if(busy){toast("Finish or stop validation before exporting");return;}exportText=text;Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.setType(mime);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.putExtra(Intent.EXTRA_TITLE,name);startActivityForResult(intent,70);}
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==70&&result==RESULT_OK&&data!=null&&data.getData()!=null&&exportText!=null){String content=exportText;exportText=null;Uri uri=data.getData();task("Writing diagnostic log…",()->{try(java.io.OutputStream output=getContentResolver().openOutputStream(uri,"wt")){if(output==null)throw new java.io.IOException();output.write(content.getBytes(StandardCharsets.UTF_8));}return true;},r->toast("File saved"));}else exportText=null;}
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if("monitor".equals(screenKey))monitorScreen();}
     private void fillRemembered(String host,EditText input){
         input.setText("");if(!preferences.getBoolean("remember",true))return;char[] saved=vault.load(host,preferences.getString("pin:"+host,""));try{input.setText(new String(saved));}finally{Arrays.fill(saved,'\0');}
     }

@@ -1,3 +1,12 @@
+Velop Control 0.8.0 — connection drop monitor
+
+- New **Tools → Connection drop monitor**: runs in the background for 1, 2 or 4 hours with a notification (Stop button) and stops by itself.
+- Every 5 seconds it records Wi-Fi state, signal, link speed, band and (with optional location permission) which node the phone is connected to, and whether the main router/gateway, the primary Velop, the internet and DNS respond — always over Wi-Fi, so mobile data cannot hide a drop.
+- Afterwards it lists each drop with its time, duration and the layer that failed first (Wi-Fi, local network, Velop, gateway, internet or DNS), node switches, and periods when Android paused the app (not counted as drops). The full log exports as CSV.
+- Sends no passwords and no router API requests. New permissions: Wi-Fi state, foreground service, notifications, wake lock; location only if you choose node tracking.
+
+121 automated tests pass; Android lint reports 0 errors. The monitor has not yet been run on a physical phone.
+
 Velop Control 0.7.0 — stock-app tools and settings
 
 - **Tools → Channel finder:** shows each node radio's channel, runs the stock channel selection once, follows progress and highlights changed and DFS channels. Replaces the old one-shot "Optimize wireless channels".
