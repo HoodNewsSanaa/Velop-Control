@@ -2,7 +2,7 @@
   {
     "id": "wifi",
     "title": "Wi-Fi networks",
-    "group": "Wireless",
+    "group": "Wi-Fi",
     "read": "wirelessap/GetRadioInfo3",
     "write": "wirelessap/SetRadioSettings3",
     "fields": [
@@ -130,7 +130,7 @@
   {
     "id": "guest",
     "title": "Guest Wi-Fi",
-    "group": "Wireless",
+    "group": "Wi-Fi",
     "read": "guestnetwork/GetGuestRadioSettings2",
     "write": "guestnetwork/SetGuestRadioSettings2",
     "fields": [
@@ -184,9 +184,18 @@
     ]
   },
   {
+    "id": "guestclients",
+    "title": "Guest Wi-Fi clients",
+    "group": "Wi-Fi",
+    "read": "guestnetwork/GetGuestNetworkClients",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
+  },
+  {
     "id": "steering",
     "title": "Automatic mesh steering",
-    "group": "Wireless",
+    "group": "Wi-Fi",
     "read": "nodes/topologyoptimization/GetTopologyOptimizationSettings2",
     "write": "nodes/topologyoptimization/SetTopologyOptimizationSettings2",
     "fields": [
@@ -210,7 +219,7 @@
   {
     "id": "wps",
     "title": "WPS",
-    "group": "Wireless",
+    "group": "Wi-Fi",
     "read": "wirelessap/GetWPSServerSettings",
     "write": "wirelessap/SetWPSServerSettings",
     "fields": [
@@ -228,7 +237,7 @@
   {
     "id": "mac",
     "title": "MAC filtering",
-    "group": "Wireless",
+    "group": "Wi-Fi",
     "read": "macfilter/GetMACFilterSettings",
     "write": "macfilter/SetMACFilterSettings",
     "fields": [
@@ -257,7 +266,7 @@
   {
     "id": "schedule",
     "title": "Wireless schedule",
-    "group": "Wireless",
+    "group": "Wi-Fi",
     "read": "wirelessscheduler/GetWirelessSchedulerSettings",
     "write": "wirelessscheduler/SetWirelessSchedulerSettings",
     "fields": [
@@ -315,7 +324,7 @@
   {
     "id": "dfs",
     "title": "DFS channels",
-    "group": "Wireless",
+    "group": "Wi-Fi",
     "read": "wirelessap/GetDFSSettings",
     "write": "wirelessap/SetDFSSettings",
     "fields": [
@@ -335,7 +344,7 @@
   {
     "id": "airtime",
     "title": "Airtime fairness",
-    "group": "Wireless",
+    "group": "Wi-Fi",
     "read": "wirelessap/GetAirtimeFairnessSettings",
     "write": "wirelessap/SetAirtimeFairnessSettings",
     "fields": [
@@ -352,18 +361,9 @@
     "note": "Shares transmit time more evenly so slow devices do not hold back fast ones. If the firmware reports it as unsupported, this page cannot be saved."
   },
   {
-    "id": "guestclients",
-    "title": "Guest Wi-Fi clients",
-    "group": "Wireless",
-    "read": "guestnetwork/GetGuestNetworkClients",
-    "write": "",
-    "fields": [],
-    "impact": "Changes apply to the selected router."
-  },
-  {
     "id": "wan",
     "title": "Internet & bridge mode",
-    "group": "Network",
+    "group": "Internet",
     "read": "router/GetWANSettings5",
     "write": "router/SetWANSettings4",
     "fields": [
@@ -606,9 +606,91 @@
     "disruption": true
   },
   {
+    "id": "wanstatus",
+    "title": "Internet status",
+    "group": "Internet",
+    "read": "router/GetWANStatus3",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
+  },
+  {
+    "id": "ipv6",
+    "title": "IPv6",
+    "group": "Internet",
+    "read": "router/GetIPv6Settings2",
+    "write": "router/SetIPv6Settings2",
+    "fields": [
+      {
+        "path": "wanType",
+        "label": "IPv6 mode",
+        "type": "enum",
+        "options": [
+          "Automatic",
+          "PPPoE",
+          "Pass-through"
+        ]
+      },
+      {
+        "path": "ipv6AutomaticSettings.isIPv6AutomaticEnabled",
+        "label": "Enable automatic IPv6",
+        "type": "bool"
+      }
+    ],
+    "impact": "IPv6 connections may be interrupted.",
+    "required": [
+      "wanType"
+    ],
+    "routerOnly": true
+  },
+  {
+    "id": "clone",
+    "title": "WAN MAC cloning",
+    "group": "Internet",
+    "read": "router/GetMACAddressCloneSettings",
+    "write": "router/SetMACAddressCloneSettings",
+    "fields": [
+      {
+        "path": "isMACAddressCloneEnabled",
+        "label": "Enable MAC cloning",
+        "type": "bool"
+      },
+      {
+        "path": "macAddress",
+        "label": "Cloned MAC address",
+        "type": "mac"
+      }
+    ],
+    "impact": "The WAN connection may restart.",
+    "required": [
+      "isMACAddressCloneEnabled"
+    ],
+    "routerOnly": true,
+    "disruption": true
+  },
+  {
+    "id": "ddns",
+    "title": "Dynamic DNS",
+    "group": "Internet",
+    "read": "ddns/GetDDNSSettings",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router.",
+    "note": "Provider-specific credential forms are not yet enabled in this build."
+  },
+  {
+    "id": "ddnsstatus",
+    "title": "Dynamic DNS status",
+    "group": "Internet",
+    "read": "ddns/GetDDNSStatus2",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
+  },
+  {
     "id": "lan",
     "title": "LAN, DHCP & reservations",
-    "group": "Network",
+    "group": "Local network",
     "read": "router/GetLANSettings",
     "write": "router/SetLANSettings",
     "fields": [
@@ -710,63 +792,18 @@
     "disruption": true
   },
   {
-    "id": "ipv6",
-    "title": "IPv6",
-    "group": "Network",
-    "read": "router/GetIPv6Settings2",
-    "write": "router/SetIPv6Settings2",
-    "fields": [
-      {
-        "path": "wanType",
-        "label": "IPv6 mode",
-        "type": "enum",
-        "options": [
-          "Automatic",
-          "PPPoE",
-          "Pass-through"
-        ]
-      },
-      {
-        "path": "ipv6AutomaticSettings.isIPv6AutomaticEnabled",
-        "label": "Enable automatic IPv6",
-        "type": "bool"
-      }
-    ],
-    "impact": "IPv6 connections may be interrupted.",
-    "required": [
-      "wanType"
-    ],
-    "routerOnly": true
-  },
-  {
-    "id": "clone",
-    "title": "WAN MAC cloning",
-    "group": "Network",
-    "read": "router/GetMACAddressCloneSettings",
-    "write": "router/SetMACAddressCloneSettings",
-    "fields": [
-      {
-        "path": "isMACAddressCloneEnabled",
-        "label": "Enable MAC cloning",
-        "type": "bool"
-      },
-      {
-        "path": "macAddress",
-        "label": "Cloned MAC address",
-        "type": "mac"
-      }
-    ],
-    "impact": "The WAN connection may restart.",
-    "required": [
-      "isMACAddressCloneEnabled"
-    ],
-    "routerOnly": true,
-    "disruption": true
+    "id": "leases",
+    "title": "DHCP leases",
+    "group": "Local network",
+    "read": "router/GetDHCPClientLeases",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
   },
   {
     "id": "routing",
     "title": "NAT & static routes",
-    "group": "Network",
+    "group": "Local network",
     "read": "router/GetRoutingSettings",
     "write": "router/SetRoutingSettings",
     "fields": [
@@ -836,6 +873,56 @@
     ],
     "routerOnly": true,
     "disruption": true
+  },
+  {
+    "id": "routingtable",
+    "title": "Routing table",
+    "group": "Local network",
+    "read": "router/GetStaticRoutingTable",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
+  },
+  {
+    "id": "expressforwarding",
+    "title": "Express Forwarding",
+    "group": "Local network",
+    "read": "router/GetExpressForwardingSettings",
+    "write": "router/SetExpressForwardingSettings",
+    "fields": [
+      {
+        "path": "isExpressForwardingEnabled",
+        "label": "Enable Express Forwarding (hardware acceleration)",
+        "type": "bool"
+      }
+    ],
+    "required": [
+      "isExpressForwardingEnabled"
+    ],
+    "routerOnly": true,
+    "impact": "Changes apply to the selected router. Traffic may pause briefly while forwarding restarts.",
+    "note": "Hardware-accelerated routing for higher internet throughput. Some traffic-shaping features are bypassed while it is on. If the firmware reports it as unsupported, this page cannot be saved."
+  },
+  {
+    "id": "iptv",
+    "title": "IPTV",
+    "group": "Local network",
+    "read": "iptv/GetIPTVSettings",
+    "write": "iptv/SetIPTVSettings",
+    "fields": [
+      {
+        "path": "isEnabled",
+        "label": "Enable IPTV support",
+        "type": "bool"
+      }
+    ],
+    "required": [
+      "isEnabled"
+    ],
+    "routerOnly": true,
+    "disruption": true,
+    "impact": "Changes apply to the selected router. WARNING: when enabling IPTV on the default 192.168.1.x /24 LAN, the firmware moves the router to 192.168.10.1. Every device then needs a new address, and you must reconnect this app to the new address.",
+    "note": "For ISP television services that need multicast/IPTV pass-through."
   },
   {
     "id": "firewall",
@@ -1199,7 +1286,7 @@
   {
     "id": "parental",
     "title": "Parental controls",
-    "group": "Family",
+    "group": "Parental controls & priority",
     "read": "parentalcontrol/GetParentalControlSettings",
     "write": "parentalcontrol/SetParentalControlSettings",
     "fields": [
@@ -1296,7 +1383,7 @@
   {
     "id": "qos",
     "title": "Device prioritization",
-    "group": "Family",
+    "group": "Parental controls & priority",
     "read": "qos/GetQoSSettings",
     "write": "qos/SetQoSSettings",
     "fields": [
@@ -1546,70 +1633,6 @@
     ]
   },
   {
-    "id": "smb",
-    "title": "USB file sharing",
-    "group": "Storage",
-    "read": "nodes/storage/GetSMBServerSettings",
-    "write": "nodes/storage/SetSMBServerSettings",
-    "fields": [
-      {
-        "path": "isAnonymousAccessEnabled",
-        "label": "Allow anonymous access",
-        "type": "bool"
-      },
-      {
-        "path": "username",
-        "label": "Sharing username",
-        "type": "text"
-      },
-      {
-        "path": "password",
-        "label": "Sharing password",
-        "type": "password"
-      }
-    ],
-    "impact": "Anonymous sharing allows network users to access files without a password.",
-    "required": [
-      "isAnonymousAccessEnabled"
-    ]
-  },
-  {
-    "id": "homekit",
-    "title": "HomeKit router support",
-    "group": "Administration",
-    "read": "homekit/GetHomeKitSettings",
-    "write": "homekit/SetHomeKitSettings",
-    "fields": [
-      {
-        "path": "isEnabled",
-        "label": "Enable HomeKit support",
-        "type": "bool"
-      }
-    ],
-    "impact": "Changing this can affect existing Apple Home integration. Enrollment still requires Apple Home.",
-    "required": [
-      "isEnabled"
-    ]
-  },
-  {
-    "id": "storage",
-    "title": "Attached USB storage",
-    "group": "Storage",
-    "read": "nodes/storage/GetNodesPartitions",
-    "write": "",
-    "fields": [],
-    "impact": "Changes apply to the selected router."
-  },
-  {
-    "id": "leases",
-    "title": "DHCP leases",
-    "group": "Network",
-    "read": "router/GetDHCPClientLeases",
-    "write": "",
-    "fields": [],
-    "impact": "Changes apply to the selected router."
-  },
-  {
     "id": "firmware",
     "title": "Firmware status",
     "group": "Administration",
@@ -1657,97 +1680,64 @@
     "note": "The router's consent setting for uploading usage and diagnostic data to Linksys."
   },
   {
-    "id": "wanstatus",
-    "title": "Internet status",
-    "group": "Network",
-    "read": "router/GetWANStatus3",
-    "write": "",
-    "fields": [],
-    "impact": "Changes apply to the selected router."
-  },
-  {
-    "id": "ddns",
-    "title": "Dynamic DNS",
-    "group": "Network",
-    "read": "ddns/GetDDNSSettings",
-    "write": "",
-    "fields": [],
-    "impact": "Changes apply to the selected router.",
-    "note": "Provider-specific credential forms are not yet enabled in this build."
-  },
-  {
-    "id": "ddnsstatus",
-    "title": "Dynamic DNS status",
-    "group": "Network",
-    "read": "ddns/GetDDNSStatus2",
-    "write": "",
-    "fields": [],
-    "impact": "Changes apply to the selected router."
-  },
-  {
-    "id": "expressforwarding",
-    "title": "Express Forwarding",
-    "group": "Network",
-    "read": "router/GetExpressForwardingSettings",
-    "write": "router/SetExpressForwardingSettings",
-    "fields": [
-      {
-        "path": "isExpressForwardingEnabled",
-        "label": "Enable Express Forwarding (hardware acceleration)",
-        "type": "bool"
-      }
-    ],
-    "required": [
-      "isExpressForwardingEnabled"
-    ],
-    "routerOnly": true,
-    "impact": "Changes apply to the selected router. Traffic may pause briefly while forwarding restarts.",
-    "note": "Hardware-accelerated routing for higher internet throughput. Some traffic-shaping features are bypassed while it is on. If the firmware reports it as unsupported, this page cannot be saved."
-  },
-  {
-    "id": "iptv",
-    "title": "IPTV",
-    "group": "Network",
-    "read": "iptv/GetIPTVSettings",
-    "write": "iptv/SetIPTVSettings",
+    "id": "homekit",
+    "title": "HomeKit router support",
+    "group": "Administration",
+    "read": "homekit/GetHomeKitSettings",
+    "write": "homekit/SetHomeKitSettings",
     "fields": [
       {
         "path": "isEnabled",
-        "label": "Enable IPTV support",
+        "label": "Enable HomeKit support",
         "type": "bool"
       }
     ],
+    "impact": "Changing this can affect existing Apple Home integration. Enrollment still requires Apple Home.",
     "required": [
       "isEnabled"
-    ],
-    "routerOnly": true,
-    "disruption": true,
-    "impact": "Changes apply to the selected router. WARNING: when enabling IPTV on the default 192.168.1.x /24 LAN, the firmware moves the router to 192.168.10.1. Every device then needs a new address, and you must reconnect this app to the new address.",
-    "note": "For ISP television services that need multicast/IPTV pass-through."
+    ]
   },
   {
-    "id": "routingtable",
-    "title": "Routing table",
-    "group": "Network",
-    "read": "router/GetStaticRoutingTable",
+    "id": "smb",
+    "title": "USB file sharing",
+    "group": "Storage",
+    "read": "nodes/storage/GetSMBServerSettings",
+    "write": "nodes/storage/SetSMBServerSettings",
+    "fields": [
+      {
+        "path": "isAnonymousAccessEnabled",
+        "label": "Allow anonymous access",
+        "type": "bool"
+      },
+      {
+        "path": "username",
+        "label": "Sharing username",
+        "type": "text"
+      },
+      {
+        "path": "password",
+        "label": "Sharing password",
+        "type": "password"
+      }
+    ],
+    "impact": "Anonymous sharing allows network users to access files without a password.",
+    "required": [
+      "isAnonymousAccessEnabled"
+    ]
+  },
+  {
+    "id": "storage",
+    "title": "Attached USB storage",
+    "group": "Storage",
+    "read": "nodes/storage/GetNodesPartitions",
     "write": "",
     "fields": [],
     "impact": "Changes apply to the selected router."
-  },
-  {
-    "id": "manualparent",
-    "title": "Manual parent selection",
-    "group": "Wireless",
-    "read": "",
-    "write": "",
-    "fields": [],
-    "impact": "Changes apply to the selected router.",
-    "note": "No safe stock-firmware control has been verified for this Intelligent Mesh system. Automatic steering remains available."
   },
   {
     "id": "onboarding",
     "title": "Add mesh nodes",
-    "group": "Administration",
+    "group": "Mesh",
     "read": "",
     "write": "",
     "fields": [],
@@ -1755,9 +1745,19 @@
     "note": "Local wired and primary-radio Bluetooth setup wizard. Node removal remains unavailable."
   },
   {
+    "id": "manualparent",
+    "title": "Manual parent selection",
+    "group": "Mesh",
+    "read": "",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router.",
+    "note": "No safe stock-firmware control has been verified for this Intelligent Mesh system. Automatic steering remains available."
+  },
+  {
     "id": "backup",
     "title": "Full configuration backup & restore",
-    "group": "Administration",
+    "group": "Mesh",
     "read": "",
     "write": "",
     "fields": [],

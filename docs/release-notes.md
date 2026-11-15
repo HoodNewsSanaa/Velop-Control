@@ -1,3 +1,15 @@
+Velop Control 0.9.0 — simpler navigation
+
+- Four tabs with icons: **Home**, **Devices**, **Mesh** and **Settings**.
+- **Home**: network status, issues that need attention, and shortcut tiles for Wi-Fi, Guest Wi-Fi, Devices, Speed check, Channel finder, Drop monitor, Restart network and Add a node.
+- **Mesh**: the mesh map, a list of nodes (connection, signal, parent, devices) and mesh tools.
+- **Devices**: compact tappable rows with node, address and signal.
+- **Settings**: management controls at the top, settings search, and pages grouped as Wi-Fi, Internet, Local network, Security, Parental controls & priority, Administration, Storage and Mesh, plus Tools & diagnostics, App preferences and About & updates. The separate Tools tab is gone; every tool is under Home, Mesh or Settings.
+- A small "‹ Back" in the header returns to the page you came from.
+- **Bridge mode / local access:** child nodes are remembered by identity, so when your main router gives a node a new address, its saved password and approved certificate carry over after an anonymous serial-number check. The Management page no longer lets you turn off wireless management, which would lock the app (which manages nodes over Wi-Fi) out of every node.
+
+124 automated tests pass; Android lint reports 0 errors.
+
 Velop Control 0.8.1 — connection monitor fixes
 
 - The connection monitor screen refreshes again when you return to the app; previously it stayed frozen at the moment monitoring started.
