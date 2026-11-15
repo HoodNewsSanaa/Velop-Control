@@ -92,4 +92,13 @@ public class NavigationTest {
         click("Explore demo");click("Restart network");
         AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();assertNotNull(dialog);assertTrue(dialog.isShowing());
     }
+    @Test public void settingsTargetOffersEveryNodeForOneStepConnection() throws Exception {
+        click("Explore demo");Topology sample=Topology.demo();sample.demo=false;
+        org.robolectric.util.ReflectionHelpers.setField(activity,"topology",sample);
+        org.robolectric.util.ReflectionHelpers.setField(activity,"primary",new JnapClient("192.168.1.10",new char[]{'x'},new byte[32]));
+        click("Settings");Spinner target=findSpinner(root());assertNotNull(target);
+        assertEquals(5,target.getAdapter().getCount());assertTrue(String.valueOf(target.getAdapter().getItem(1)).endsWith("· connect"));
+        assertNotNull(findContaining(root(),"use the primary's password automatically"));
+    }
+    private Spinner findSpinner(View v){if(v instanceof Spinner)return (Spinner)v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){Spinner f=findSpinner(g.getChildAt(i));if(f!=null)return f;}}return null;}
 }

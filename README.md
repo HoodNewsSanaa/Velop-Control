@@ -1,14 +1,14 @@
-# Velop Control 0.9.0
+# Velop Control 0.9.1
 
 Standalone Android app for stock Linksys Intelligent Mesh routers. Android 8.0+; native phone and tablet layouts; no WebView, Linksys account or separate backend. The first installable build is a development preview, with management controls off by default.
 
 ## Install and first test
 
-Download the APK from [the v0.9.0 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.9.0), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
+Download the APK from [the v0.9.1 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.9.1), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
 
 Next, while on the local Wi-Fi, connect to the **primary Velop’s** address (on first use the field suggests your Wi-Fi gateway, which is the primary in router mode) and enter its local admin password. In bridge mode, use the Velop’s assigned address rather than the OpenWrt/OPNsense gateway. Approve the local HTTPS certificate only after checking the address on a trusted network. The app pins its SHA-256 fingerprint. Successful passwords are remembered by default, encrypted on-device with Android Keystore; this can be disabled or cleared in Tools.
 
-Keep controls disabled for the first hardware session. Use **Tools → Run sequential validation**, then **Export diagnostic log**. It makes one read at a time, stops authenticated tests for a node after rejection, and never tests setters. Keep the app open until collection finishes. Each additional node must be connected separately from its details page; passwords are not sprayed across the mesh. Proceed one hardware test at a time.
+Keep controls disabled for the first hardware session. Use **Settings → Tools & diagnostics → Run sequential validation**, then **Export diagnostic log**. It makes one read at a time, stops authenticated tests for a node after rejection, and never tests setters. Keep the app open until collection finishes. The mesh syncs the primary's admin password to every node, so connecting to a child node (from its page or the Settings target picker) tries its saved password, else the primary's, exactly once, after the node reports it is not locked or delaying logins. A rejection asks for that node's password and is never retried automatically; passwords are never tried across nodes in bulk. A child presenting the exact certificate already approved for the primary is trusted without another prompt. Proceed one hardware test at a time.
 
 ## What is implemented
 
@@ -90,6 +90,10 @@ Automatic setup may enroll multiple eligible unconfigured nodes; power only the 
 ## Changes in 0.6.0
 
 Automatic primary discovery and per-build certificate handling, described below. **98 automated tests pass** and Android lint reports **0 errors**. The permanent signing certificate is unchanged for in-place updates from 0.3.0–0.5.0.
+
+## Changes in 0.9.1
+
+Child nodes connect with the primary's synced password (or their saved one) in a single, lockout-checked attempt, and the Settings target picker lists every node. **125 automated tests pass** and Android lint reports **0 errors**.
 
 ## Changes in 0.9.0
 

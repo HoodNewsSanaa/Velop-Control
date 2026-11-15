@@ -1,3 +1,13 @@
+Velop Control 0.9.1 — one password for the whole mesh
+
+- The firmware syncs the primary's admin password to every node, so the app no longer asks for it again. Connecting to a child node (its page, or picking it as the Settings target) uses the node's saved password, else the primary's, in a single attempt after the node reports it is not locked or delaying logins.
+- If that attempt is rejected, the app asks for that node's password and never retries automatically; a locked or delayed node is reported without prompting.
+- The Settings target picker now lists every node; unconnected ones connect in one tap.
+- A child presenting the exact certificate already approved for the primary (nodes on one firmware build share it) no longer shows a second trust prompt.
+- "Reconnect / replace password" on a node's page still always asks.
+
+125 automated tests pass; Android lint reports 0 errors.
+
 Velop Control 0.9.0 — simpler navigation
 
 - Four tabs with icons: **Home**, **Devices**, **Mesh** and **Settings**.

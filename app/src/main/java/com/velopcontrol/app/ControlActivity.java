@@ -106,10 +106,12 @@ public final class ControlActivity extends Activity {
     }
     private String connectionLabel(){if(topology!=null&&topology.demo)return "DEMO · Sample data · No router connected";if(primary==null)return "Local Android app · Stock Linksys firmware";return primary.host()+" · "+(bridge?"Bridge mode":"Local mesh")+(management?" · Controls enabled":" · Read-only");}
     private void setBusy(boolean value,String message){busy=value;if(progress!=null)progress.setVisibility(value?View.VISIBLE:View.GONE);if(status!=null)status.setText(value?message:connectionLabel());}
-    private <T> void task(String message,Callable<T> work,Consumer<T> done){
+    private <T> void task(String message,Callable<T> work,Consumer<T> done){task(message,work,done,null);}
+    /** As task(), but {@code failed} replaces the default error dialog and keeps automatic refresh running. */
+    private <T> void task(String message,Callable<T> work,Consumer<T> done,Consumer<Exception> failed){
         if(busy){toast("Wait for the current operation to finish");return;}main.removeCallbacks(poll);setBusy(true,message);int ticket=generation;
         worker.execute(()->{try{if(ticket!=generation)return;T result=work.call();main.post(()->{if(ticket!=generation||isDestroyed()){if(result instanceof AutoCloseable)try{((AutoCloseable)result).close();}catch(Exception ignored){}return;}setBusy(false,"");done.accept(result);schedule();});}
-            catch(Exception error){main.post(()->{if(ticket!=generation||isDestroyed())return;setBusy(false,"");auto=false;if(topology!=null&&!topology.demo&&back==null){notice="The last operation failed. Automatic refresh is paused; the previous mesh snapshot is retained.";showTab();}message("Unable to complete",safeMessage(error));schedule();});}});
+            catch(Exception error){main.post(()->{if(ticket!=generation||isDestroyed())return;setBusy(false,"");if(failed!=null){failed.accept(error);schedule();return;}auto=false;if(topology!=null&&!topology.demo&&back==null){notice="The last operation failed. Automatic refresh is paused; the previous mesh snapshot is retained.";showTab();}message("Unable to complete",safeMessage(error));schedule();});}});
     }
     private static String safeMessage(Exception e){
         if(e instanceof Authentication.Failure)return e.getMessage();
@@ -186,7 +188,8 @@ public final class ControlActivity extends Activity {
         String where="Primary Velop found at "+host+(moved?" (moved from "+remembered.host+")":"")+".";
         discoveryStatus(match.certificateChanged?where+" Its serial number matches, but its certificate is new, which is expected after a Linksys firmware update. Review and approve it when you connect.":moved?where+" Its approved certificate and serial number match.":where);
     }
-    private void connect(EditText address,EditText input,boolean asPrimary){
+    private void connect(EditText address,EditText input,boolean asPrimary){connect(address,input,asPrimary,null);}
+    private void connect(EditText address,EditText input,boolean asPrimary,Consumer<Exception> failed){
         if(busy)return;if(discovery!=null){discovery.set(true);discovery=null;discoveryStatus("");}final String host;try{host=ReadPolicy.privateAddress(address.getText().toString());}catch(Exception e){address.setError(e.getMessage());return;}
         if(input.length()==0){input.setError("Enter this node’s local administrator password");return;}
         char[] secret=new char[input.length()];input.getText().getChars(0,input.length(),secret,0);input.setText("");
@@ -207,11 +210,14 @@ public final class ControlActivity extends Activity {
                             JnapClient old=sessions.put(host,accepted);if(old!=null)old.close();selectedHost=host;
                             preferences.edit().putString("pin:"+host,identity.formatted()).apply();
                             if(asPrimary||primary!=null&&host.equals(primary.host())){primary=accepted;preferences.edit().putString("lastHost",host).putString("primaryPin",identity.formatted()).putString("primarySerial",serial.get()).apply();topology=null;latest.clear();tab="Home";back=null;refresh();}
-                            else{rememberNode(host,identity.formatted(),serial.get());notice="Connected directly to "+host+". Other node sessions are unchanged.";back=null;tab="Mesh";showTab();}
-                        });
+                            else{rememberNode(host,identity.formatted(),serial.get());Runnable then=nodeConnectedThen;nodeConnectedThen=null;
+                                if(then!=null)then.run();else{notice="Connected directly to "+host+". Other node sessions are unchanged.";back=null;tab="Mesh";showTab();}}
+                        },failed);
                     }catch(Exception e){Arrays.fill(secret,'\0');message("Connection failed",safeMessage(e));}
                 };
-                if(known.equals(identity.formatted()))establish.run();else ui.dialog(known.isEmpty()?"Trust this local router?":"Router certificate changed")
+                // Nodes on one firmware build share the certificate already approved for the primary; any other certificate still asks.
+                boolean sameAsPrimary=known.isEmpty()&&!asPrimary&&identity.formatted().equals(preferences.getString("primaryPin",""));
+                if(known.equals(identity.formatted())||sameAsPrimary)establish.run();else ui.dialog(known.isEmpty()?"Trust this local router?":"Router certificate changed")
                     .setMessage("Address: "+host+"\nCertificate: "+identity.subject+"\n\nSHA-256\n"+identity.formatted()+"\n\n"+PrimaryLocator.trustNotice(!known.isEmpty(),PrimaryLocator.linksys(identity.subject),sameSerial))
                     .setNegativeButton("Cancel",(d,w)->Arrays.fill(secret,'\0')).setPositiveButton("Trust & connect",(d,w)->establish.run()).setOnCancelListener(d->Arrays.fill(secret,'\0')).show();
             });}catch(Exception e){Arrays.fill(secret,'\0');main.post(()->{if(ticket==generation&&!isDestroyed()){setBusy(false,"");message("Could not connect",safeMessage(e));}});}
@@ -236,13 +242,34 @@ public final class ControlActivity extends Activity {
                         if(preferences.getBoolean("remember",true))try{vault.move(old,host,pin);}catch(Exception ignored){}
                         toast(node.name+" moved from "+old+" to "+host+"; saved login carried over");}
                     else preferences.edit().remove("node:"+node.id+":host").apply();
-                    connectNodeDialog(node);});});
+                    connectNodeAuto(node);});});
             return;
         }
-        connectNodeDialog(node);
+        connectNodeAuto(node);
     }
-    private void connectNodeDialog(Topology.Node node){
-        LinearLayout fields=ui.column();fields.setPadding(ui.d(22),ui.d(8),ui.d(22),0);ui.text(fields,"Use the local router admin password. Saved credentials are specific to this node and certificate. A failed connection leaves the primary session connected.",14,ui.muted);
+    /** Nodes whose saved or primary password was rejected this session: never auto-tried again. */
+    private final Set<String> autoRejected=new HashSet<>();
+    private Runnable nodeConnectedThen;
+    /**
+     * The mesh syncs the primary's admin password to every node (config_sync::admin_password_synchronized), so try the node's
+     * saved password, else the primary's, exactly once. The node's lockout status is checked first by JnapClient.authenticate.
+     * A rejection falls back to asking, and is never retried automatically.
+     */
+    private void connectNodeAuto(Topology.Node node){
+        if(primary==null||autoRejected.contains(node.ip)){connectNodeDialog(node,null);return;}
+        char[] saved=vault.load(node.ip,preferences.getString("pin:"+node.ip,""));boolean useSaved=saved.length>0;
+        char[] secret=useSaved?saved:primary.passwordCopy();
+        EditText address=ui.input("",node.ip,false),input=ui.input("",new String(secret),true);Arrays.fill(secret,'\0');
+        connect(address,input,false,error->{
+            Runnable fromPicker=nodeConnectedThen;nodeConnectedThen=null;if(fromPicker!=null&&back==null&&tab.equals("Settings"))showTab();
+            if(error instanceof Authentication.Failure){String code=((Authentication.Failure)error).code;autoRejected.add(node.ip);
+                if(code.equals("ErrorAdminAccountLocked")||code.equals("ErrorPasswordCheckDelayed")){message("Cannot connect to "+node.name,error.getMessage());return;}
+                connectNodeDialog(node,node.name+" did not accept "+(useSaved?"its saved password":"the primary's password")+". It may have a different password if mesh syncing failed. Enter its password; the app will not retry automatically.");}
+            else message("Could not connect to "+node.name,safeMessage(error));
+        });
+    }
+    private void connectNodeDialog(Topology.Node node,String reason){
+        LinearLayout fields=ui.column();fields.setPadding(ui.d(22),ui.d(8),ui.d(22),0);if(reason!=null)ui.text(fields,reason,14,ui.warning);ui.text(fields,"Use the local router admin password. Saved credentials are specific to this node and certificate. A failed connection leaves the primary session connected.",14,ui.muted);
         EditText address=ui.input("Node IP",node.ip,false);address.setEnabled(false);fields.addView(address);EditText password=ui.input("This node’s local password","",true);fillRemembered(node.ip,password);fields.addView(password);
         AlertDialog dialog=ui.dialog("Connect to "+node.name).setView(fields).setNegativeButton("Cancel",null).setPositiveButton("Connect",null).create();dialog.setOnShowListener(v->dialog.getButton(-1).setOnClickListener(b->{if(password.length()==0){password.setError("Enter the local password");return;}dialog.dismiss();connect(address,password,false);}));dialog.show();
     }
@@ -324,7 +351,7 @@ public final class ControlActivity extends Activity {
         if(observation!=null)key(card,"Status read",DateFormat.getDateTimeInstance(DateFormat.MEDIUM,DateFormat.SHORT).format(new Date(observation.readAt)));
         if(!topology.demo){
             JnapClient direct=sessions.get(n.ip);if(direct==null)ui.action(page,"Connect directly to this node",false,()->connectNode(n));
-            else{ui.action(page,"Read current uptime",false,()->task("Reading node uptime…",()->{JSONObject r=direct.read("diagnostics/GetSystemStats",true);SettingsRepository.requireOK(r);return RestartMonitor.uptime(r);},uptime->{if(uptime>=0)health.put(n.ip,new NodeHealth(uptime));node(n);if(uptime<0)message("Uptime unavailable","This firmware did not return a valid uptime value.");}));ui.action(page,"Reconnect / replace password",false,()->connectNode(n));ui.action(page,"Settings for this node",false,()->{selectedHost=n.ip;tab="Settings";back=null;showTab();});ui.action(page,"Read node diagnostics",false,()->nodeDiagnostics(n,direct));ui.action(page,n.primary?"Restart whole network…":"Restart this node…",false,()->reboot(n,direct));}
+            else{ui.action(page,"Read current uptime",false,()->task("Reading node uptime…",()->{JSONObject r=direct.read("diagnostics/GetSystemStats",true);SettingsRepository.requireOK(r);return RestartMonitor.uptime(r);},uptime->{if(uptime>=0)health.put(n.ip,new NodeHealth(uptime));node(n);if(uptime<0)message("Uptime unavailable","This firmware did not return a valid uptime value.");}));ui.action(page,"Reconnect / replace password",false,()->connectNodeDialog(n,null));ui.action(page,"Settings for this node",false,()->{selectedHost=n.ip;tab="Settings";back=null;showTab();});ui.action(page,"Read node diagnostics",false,()->nodeDiagnostics(n,direct));ui.action(page,n.primary?"Restart whole network…":"Restart this node…",false,()->reboot(n,direct));}
             ui.action(page,"Rename node…",false,()->rename(n));
             if(direct!=null&&"Wired".equalsIgnoreCase(n.link))ui.action(page,"Inspect wired neighbors (experimental)",false,()->wiredNeighbors(n,direct));
         }
@@ -369,7 +396,7 @@ public final class ControlActivity extends Activity {
         ui.text(controls,management?"On: you can review and apply changes. Turns off when you disconnect.":"Off: settings are view-only. Turn on to change settings; every change still needs a review.",13,ui.muted);
         toggle.setOnCheckedChangeListener((b,on)->{if(on){toggle.setChecked(false);ui.dialog("Turn on management controls?").setMessage("The app can then send supported configuration commands. Writes have not been tested on your hardware. Every change requires its own review. Controls turn off when you disconnect.").setNegativeButton("Keep read-only",null).setPositiveButton("Turn on",(d,w)->{management=true;showTab();}).show();}else{management=false;showTab();}});
         page.addView(controls);
-        if(!topology.demo&&sessions.size()>1)targetPicker();else if(!topology.demo&&selected()!=null)ui.text(page,"Settings apply to "+targetName(selectedHost),12,ui.muted);
+        if(!topology.demo&&(sessions.size()>1||topology.nodes.size()>1))targetPicker();else if(!topology.demo&&selected()!=null)ui.text(page,"Settings apply to "+targetName(selectedHost),12,ui.muted);
         EditText search=ui.input("Search settings","",false);page.addView(search);LinearLayout list=ui.column();page.addView(list);
         Runnable fill=()->{list.removeAllViews();String q=search.getText().toString().trim().toLowerCase(Locale.ROOT);
             if(q.isEmpty()){
@@ -399,9 +426,17 @@ public final class ControlActivity extends Activity {
     private void targetPicker(){
         LinearLayout card=ui.card();ui.text(card,"SETTINGS TARGET",11,ui.accent);
         if(topology.demo){ui.text(card,"Demo · Connect to read actual settings",14,ui.text);page.addView(card);return;}
-        List<String> hosts=new ArrayList<>(sessions.keySet()),labels=new ArrayList<>();for(String host:hosts){String name=host;for(Topology.Node n:topology.nodes)if(host.equals(n.ip))name=n.name+" · "+host;labels.add(name);}
-        Spinner selector=new Spinner(ui.dialogContext());selector.setAdapter(new ArrayAdapter<>(ui.dialogContext(),android.R.layout.simple_spinner_dropdown_item,labels));selector.setSelection(Math.max(0,hosts.indexOf(selectedHost)));card.addView(selector);selector.setMinimumHeight(ui.d(48));
-        selector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> p){}public void onItemSelected(AdapterView<?> p,View v,int i,long id){if(i<hosts.size()&&!selectedHost.equals(hosts.get(i))){selectedHost=hosts.get(i);pageStatus.clear();showTab();}}});ui.text(card,"To add another target, open Mesh and connect directly to that node.",12,ui.muted);page.addView(card);
+        List<String> hosts=new ArrayList<>(),labels=new ArrayList<>();List<Topology.Node> nodes=new ArrayList<>();
+        for(String host:sessions.keySet()){hosts.add(host);labels.add(targetName(host));Topology.Node match=null;for(Topology.Node n:topology.nodes)if(host.equals(n.ip))match=n;nodes.add(match);}
+        for(Topology.Node n:topology.nodes)if(n.ip!=null&&!n.ip.isEmpty()&&!sessions.containsKey(n.ip)){hosts.add(n.ip);labels.add(n.name+" · "+n.ip+" · connect");nodes.add(n);}
+        int initial=Math.max(0,hosts.indexOf(selectedHost));
+        Spinner selector=new Spinner(ui.dialogContext());selector.setAdapter(new ArrayAdapter<>(ui.dialogContext(),android.R.layout.simple_spinner_dropdown_item,labels));selector.setSelection(initial);card.addView(selector);selector.setMinimumHeight(ui.d(48));
+        selector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){public void onNothingSelected(AdapterView<?> p){}public void onItemSelected(AdapterView<?> p,View v,int i,long id){
+            // Android reports the initial selection when the spinner is laid out; act only on a real change.
+            if(i==initial||i>=hosts.size()||selectedHost.equals(hosts.get(i)))return;String host=hosts.get(i);
+            if(sessions.containsKey(host)){selectedHost=host;pageStatus.clear();showTab();return;}
+            Topology.Node n=nodes.get(i);if(n==null)return;nodeConnectedThen=()->{pageStatus.clear();tab="Settings";back=null;showTab();};connectNode(n);}});
+        ui.text(card,"Nodes you have not connected to use the primary's password automatically (one attempt).",12,ui.muted);page.addView(card);
     }
     private void openSettings(SettingsCatalog.Spec spec){
         if(spec.id.equals("onboarding")){onboardingScreen();return;}if(spec.read.isEmpty()){message(spec.title,spec.note);return;}if(topology.demo){demoSettings(spec);return;}
