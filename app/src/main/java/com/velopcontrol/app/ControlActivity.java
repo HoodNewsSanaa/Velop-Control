@@ -67,7 +67,9 @@ public final class ControlActivity extends Activity {
         auto=preferences.getBoolean("auto",false);login("");
         if(preferences.getBoolean("updateChecks",true)&&System.currentTimeMillis()-preferences.getLong("lastUpdateCheck",0)>8L*3600000)checkUpdates(false);
     }
+    private ScrollView scroller;private String scrollerTitle;
     private void chrome(String title,boolean navigation){
+        int keepScroll=scroller!=null&&title.equals(scrollerTitle)?scroller.getScrollY():0;
         showingUpdates=false;showingOnboarding=false;loginAddress=null;loginDiscovery=null;screenKey=null;
         ui=new Ui(this,preferences.getBoolean("dark",true));frame=ui.column();frame.setBackgroundColor(ui.bg);setContentView(frame);
         frame.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
@@ -81,7 +83,8 @@ public final class ControlActivity extends Activity {
         LinearLayout middle=ui.row();middle.setGravity(Gravity.TOP);frame.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
         boolean wide=getResources().getConfiguration().screenWidthDp>=720;
         if(navigation&&wide)middle.addView(navigation(true),new LinearLayout.LayoutParams(ui.d(150),-1));
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);page=ui.column();page.setPadding(ui.d(20),ui.d(14),ui.d(20),ui.d(28));scroll.addView(page,new ScrollView.LayoutParams(-1,-2));middle.addView(scroll,new LinearLayout.LayoutParams(0,-1,1));
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroller=scroll;scrollerTitle=title;
+        if(keepScroll>0)scroll.getViewTreeObserver().addOnGlobalLayoutListener(new android.view.ViewTreeObserver.OnGlobalLayoutListener(){public void onGlobalLayout(){scroll.getViewTreeObserver().removeOnGlobalLayoutListener(this);scroll.scrollTo(0,keepScroll);}});page=ui.column();page.setPadding(ui.d(20),ui.d(14),ui.d(20),ui.d(28));scroll.addView(page,new ScrollView.LayoutParams(-1,-2));middle.addView(scroll,new LinearLayout.LayoutParams(0,-1,1));
         if(navigation&&!wide)frame.addView(navigation(false),new LinearLayout.LayoutParams(-1,ui.d(64)));
     }
     private View navigation(boolean vertical){
@@ -592,6 +595,11 @@ public final class ControlActivity extends Activity {
                 main.post(()->{if(ticket!=generation||isDestroyed()||!key.equals(screenKey))return;if(e2!=null)fail.accept(e2);else ok.accept(res);});});
         },delayMs);
     }
+    /** Polls stop while the app is in the background; pick up the active one again. */
+    private void resumeToolPolls(){
+        if(screenKey==null)return;
+        switch(screenKey){case "channels":if(channelScan)pollChannels();break;case "speed":if(speedRunning)pollSpeed();break;case "trace":if(traceRunning)pollTrace();break;case "wps":if(wpsActive)pollWps();break;default:}
+    }
     private long since(long start){return (SystemClock.elapsedRealtime()-start)/1000;}
 
     private NetworkTools.Channels channelsBefore,channelsNow;private boolean channelScan;private long channelScanStarted;private String channelNote="";
@@ -639,14 +647,14 @@ public final class ControlActivity extends Activity {
         renderChannels();pollChannels();
     }
 
-    private List<NetworkTools.Speed> speedHistory=new ArrayList<>();private NetworkTools.Speed speedNow;private boolean speedRunning;private long speedStarted;private String speedNote="";
+    private List<NetworkTools.Speed> speedHistory=new ArrayList<>();private NetworkTools.Speed speedNow;private boolean speedRunning,speedSeenRunning;private long speedStarted;private String speedNote="";
     private static final String SPEED_HISTORY_QUERY="{\"healthCheckModule\":\"SpeedTest\",\"lastNumberOfResults\":5,\"includeModuleResults\":true}";
     private void speedCheck(){
         if(topology==null)return;
         if(topology.demo){speedHistory=new ArrayList<>();speedNow=null;speedRunning=false;speedNote="Demo: connect to run the router's speed check.";renderSpeed();return;}
         if(primary==null){message("Connect first","Speed check runs on the primary node.");return;}
         JnapClient s=primary;
-        task("Reading speed check results…",()->NetworkTools.speedHistory(s.query(NetworkTools.SPEED_RESULTS,new JSONObject(SPEED_HISTORY_QUERY))),h->{speedHistory=h;renderSpeed();});
+        task("Reading speed check results…",()->NetworkTools.speedHistory(s.query(NetworkTools.SPEED_RESULTS,new JSONObject(SPEED_HISTORY_QUERY))),h->{speedHistory=h;renderSpeed();if(speedRunning)pollSpeed();});
     }
     private void renderSpeed(){
         detail("Speed check",this::showTab);screenKey="speed";
@@ -665,14 +673,15 @@ public final class ControlActivity extends Activity {
     private void startSpeed(){
         if(!controls()||primary==null)return;JnapClient s=primary;
         confirm("Run speed check?","The primary router runs Speedtest by Ookla over your internet connection for about 30–60 seconds and stores the result. Other traffic may slow down during the test.",false,()->
-            task("Starting speed check once…",()->{SettingsRepository.requireOK(s.write(NetworkTools.SPEED_RUN,new JSONObject().put("runHealthCheckModule","SpeedTest")));return true;},r->{speedRunning=true;speedNow=null;speedStarted=SystemClock.elapsedRealtime();speedNote="";renderSpeed();pollSpeed();}));
+            task("Starting speed check once…",()->{SettingsRepository.requireOK(s.write(NetworkTools.SPEED_RUN,new JSONObject().put("runHealthCheckModule","SpeedTest")));return true;},r->{speedRunning=true;speedSeenRunning=false;speedNow=null;speedStarted=SystemClock.elapsedRealtime();speedNote="";renderSpeed();pollSpeed();}));
     }
     private void pollSpeed(){
         JnapClient s=primary;if(s==null)return;
         quietPoll("speed",5000,()->s.read(NetworkTools.SPEED_STATUS,true),r->{
             NetworkTools.Speed now=null;boolean parsed=true;try{now=NetworkTools.speedStatus(r);}catch(Exception e){parsed=false;}
-            if(parsed&&(now==null||!now.running)){speedRunning=false;speedNow=now;finishSpeed();return;}
-            if(now!=null)speedNow=now;
+            boolean pending=parsed&&now==null&&!speedSeenRunning&&since(speedStarted)<20;
+            if(parsed&&!pending&&(now==null||!now.running)){speedRunning=false;speedNow=now;finishSpeed();return;}
+            if(now!=null){speedNow=now;speedSeenRunning=true;}
             if(since(speedStarted)>180){speedRunning=false;speedNote="No result after 3 minutes. Reload results later.";renderSpeed();return;}
             renderSpeed();pollSpeed();
         },e->{if(e instanceof SecurityException||since(speedStarted)>180){speedRunning=false;speedNote=safeMessage(e);renderSpeed();return;}renderSpeed();pollSpeed();});
@@ -714,7 +723,7 @@ public final class ControlActivity extends Activity {
         if(topology==null)return;
         if(topology.demo){wpsActive=false;wpsNote="Demo: connect to start WPS pairing on the primary node.";renderWps();return;}
         if(primary==null){message("Connect first","WPS pairing runs on the primary node.");return;}
-        wpsNote="";renderWps();
+        if(!wpsActive)wpsNote="";renderWps();if(wpsActive)pollWps();
     }
     private void renderWps(){
         detail("WPS pairing",this::showTab);screenKey="wps";
@@ -858,10 +867,10 @@ public final class ControlActivity extends Activity {
     private void message(String title,String text){if(!isFinishing()&&!isDestroyed())ui.dialog(title).setMessage(text).setPositiveButton("OK",null).show();}
     private void toast(String text){Toast.makeText(this,text,Toast.LENGTH_SHORT).show();}
     private void schedule(){main.removeCallbacks(poll);if(auto&&resumed&&primary!=null&&!validating)main.postDelayed(poll,30000);}
-    private void disconnect(){generation++;cancelled=true;validating=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);main.removeCallbacks(onboardingPoll);onboarding=null;onboardingSession=null;onboardingChecking=false;onboardingMessage="";restart=null;restartSession=null;restartChecking=false;for(JnapClient c:sessions.values())c.close();sessions.clear();primary=null;topology=null;latest.clear();pageStatus.clear();health.clear();selectedHost="";management=false;busy=false;back=null;notice="";nodeFilter="";clientQuery="";scope="All devices";audit=null;exportText=null;}
+    private void disconnect(){generation++;cancelled=true;validating=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);main.removeCallbacks(onboardingPoll);onboarding=null;onboardingSession=null;onboardingChecking=false;onboardingMessage="";restart=null;restartSession=null;restartChecking=false;screenKey=null;channelScan=false;channelsBefore=null;channelsNow=null;channelNote="";speedRunning=false;speedNow=null;speedHistory=new ArrayList<>();speedNote="";traceRunning=false;traceSession=null;wpsActive=false;wpsNote="";for(JnapClient c:sessions.values())c.close();sessions.clear();primary=null;topology=null;latest.clear();pageStatus.clear();health.clear();selectedHost="";management=false;busy=false;back=null;notice="";nodeFilter="";clientQuery="";scope="All devices";audit=null;exportText=null;}
     @Override public void onBackPressed(){if(back!=null){Runnable action=back;back=null;action.run();}else if(topology!=null&&!tab.equals("Overview")){tab="Overview";showTab();}else if(topology!=null){ui.dialog("Disconnect from your mesh?").setNegativeButton("Stay",null).setPositiveButton("Disconnect",(d,w)->{disconnect();login("");}).show();}else super.onBackPressed();}
     @Override public void onConfigurationChanged(Configuration configuration){super.onConfigurationChanged(configuration);if(showingOnboarding)onboardingScreen();else if(back==null){if(topology==null)login("");else showTab();}}
-    @Override protected void onResume(){super.onResume();resumed=true;schedule();scheduleRestart();scheduleOnboarding();}
+    @Override protected void onResume(){super.onResume();resumed=true;schedule();scheduleRestart();scheduleOnboarding();resumeToolPolls();}
     @Override protected void onPause(){resumed=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);main.removeCallbacks(onboardingPoll);super.onPause();}
     @Override protected void onDestroy(){if(discovery!=null)discovery.set(true);disconnect();worker.shutdownNow();updateWorker.shutdownNow();discoveryWorker.shutdownNow();history.close();super.onDestroy();}
 }

@@ -93,7 +93,7 @@ Automatic primary discovery and per-build certificate handling, described below.
 
 ## Changes in 0.7.0
 
-Adds the remaining stock-app settings and tools found in the MX4200 firmware: **Channel finder**, **Speed check**, traceroute, WPS pairing, firmware check/install, router logs, removing offline devices, and settings pages for DFS, airtime fairness, Express Forwarding, IPTV, guest clients, routing table, cloud remote access and usage-data sharing. Factory reset, node removal and firmware rollback are deliberately not included. **116 automated tests pass** and Android lint reports **0 errors**.
+Adds the remaining stock-app settings and tools found in the MX4200 firmware: **Channel finder**, **Speed check**, traceroute, WPS pairing, firmware check/install, router logs, removing offline devices, and settings pages for DFS, airtime fairness, Express Forwarding, IPTV, guest clients, routing table, cloud remote access and usage-data sharing. Factory reset, node removal and firmware rollback are deliberately not included. Also fixes tool polling after backgrounding, scroll jumps on refresh, disconnects on resize, and duplicate history entries. **117 automated tests pass** and Android lint reports **0 errors**.
 
 ## Changes in 0.6.3
 

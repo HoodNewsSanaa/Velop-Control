@@ -7,9 +7,10 @@ Velop Control 0.7.0 — stock-app tools and settings
 - New settings pages: DFS channels (now editable), Airtime fairness, Express Forwarding, IPTV (warns that enabling it can move a default LAN to 192.168.10.1), Linksys cloud remote access, Usage-data sharing, plus read-only Guest Wi-Fi clients and Routing table.
 - Node and client steering remain on Settings → Automatic mesh steering (the firmware has no other steering settings).
 - Deliberately not included: factory reset, node removal and firmware rollback.
+- Fixes: tool screens resume checking after the app returns from the background and when reopened; disconnecting clears tool state; Speed check no longer reports "finished" before the router starts the test; screens keep their scroll position when they refresh (including 30-second auto-refresh); resizing, folding or attaching a keyboard no longer disconnects; connection history no longer logs every device again after each app launch.
 - All changes use the existing guarded flow: management controls, a preview or confirmation, and typing APPLY for disruptive actions.
 
-116 automated tests pass; Android lint reports 0 errors. Hardware validation of the new writes and tools is pending.
+117 automated tests pass; Android lint reports 0 errors. Hardware validation of the new writes and tools is pending.
 
 Velop Control 0.6.3 — neighbor signal fixes
 
