@@ -1,10 +1,10 @@
-# Velop Control 0.6.3
+# Velop Control 0.7.0
 
 Standalone Android app for stock Linksys Intelligent Mesh routers. Android 8.0+; native phone and tablet layouts; no WebView, Linksys account or separate backend. The first installable build is a development preview, with management controls off by default.
 
 ## Install and first test
 
-Download the APK from [the v0.6.3 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.6.3), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
+Download the APK from [the v0.7.0 release](https://github.com/HoodNewsSanaa/Velop-Control/releases/tag/v0.7.0), then open it on Android and permit installation from that source if Android asks. Start with **Explore demo** to check that navigation works on your device. It contains five synthetic nodes and sample clients, and sends no router requests.
 
 Next, while on the local Wi-Fi, connect to the **primary Velop’s** address (on first use the field suggests your Wi-Fi gateway, which is the primary in router mode) and enter its local admin password. In bridge mode, use the Velop’s assigned address rather than the OpenWrt/OPNsense gateway. Approve the local HTTPS certificate only after checking the address on a trusted network. The app pins its SHA-256 fingerprint. Successful passwords are remembered by default, encrypted on-device with Android Keystore; this can be disabled or cleared in Tools.
 
@@ -15,7 +15,8 @@ Keep controls disabled for the first hardware session. Use **Tools → Run seque
 - Five navigation sections: Overview, Nodes, Devices, Settings and Tools. Bottom navigation on phones, a sidebar on tablets, light/dark appearance and search.
 - Inventory discovery from a primary seed IP; reported topology, parents, node details, firmware, signal and hop metrics; explicit missing/unknown values.
 - Searchable and filterable client list with AP association, IP/MAC, wired/wireless type, negotiated rate and signal where supplied.
-- 38 settings pages, including native editors for wireless networks, guest access, steering, schedules, MAC filtering, WAN/bridge, LAN/DHCP/reservations, IPv6, routing, firewall, forwarding, parental controls, QoS device rules, management, time, logging, port LEDs, scheduled reboot, automatic update policy, SMB and HomeKit.
+- 45 settings pages, including native editors for wireless networks, guest access, client and node steering, DFS, airtime fairness, Express Forwarding, IPTV, schedules, MAC filtering, WAN/bridge, LAN/DHCP/reservations, IPv6, routing, firewall, forwarding, parental controls, QoS device rules, management, time, logging, port LEDs, scheduled reboot, automatic update policy, SMB, HomeKit, Linksys cloud remote access and usage-data sharing.
+- Stock-app tools: Channel finder, Speed check (router Speedtest), traceroute, WPS push-button pairing, firmware check/install via the stock update service, router logs and removing offline devices.
 - Explicit change previews, native password fields, supported radio choices, rule/reservation tables, and a 48-slot daily schedule editor.
 - Guarded node rename, direct-node restart, local admin password change, router ping and automatic channel optimization.
 - Read-only firmware/storage/WAN/DDNS information, sequential API validation and identifier-free diagnostic export through Android’s file picker.
@@ -89,6 +90,10 @@ Automatic setup may enroll multiple eligible unconfigured nodes; power only the 
 ## Changes in 0.6.0
 
 Automatic primary discovery and per-build certificate handling, described below. **98 automated tests pass** and Android lint reports **0 errors**. The permanent signing certificate is unchanged for in-place updates from 0.3.0–0.5.0.
+
+## Changes in 0.7.0
+
+Adds the remaining stock-app settings and tools found in the MX4200 firmware: **Channel finder**, **Speed check**, traceroute, WPS pairing, firmware check/install, router logs, removing offline devices, and settings pages for DFS, airtime fairness, Express Forwarding, IPTV, guest clients, routing table, cloud remote access and usage-data sharing. Factory reset, node removal and firmware rollback are deliberately not included. Also fixes tool polling after backgrounding, scroll jumps on refresh, disconnects on resize, and duplicate history entries. **117 automated tests pass** and Android lint reports **0 errors**.
 
 ## Changes in 0.6.3
 

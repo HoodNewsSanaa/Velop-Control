@@ -21,7 +21,7 @@ public final class Topology {
         public final Set<String> macs = new LinkedHashSet<>();
     }
     public static final class Client {
-        public String name, ip, mac, nodeId, type, rssi, rate, timestamp;
+        public String id = "", name, ip, mac, nodeId, type, rssi, rate, timestamp;
         public boolean seen;
     }
 
@@ -144,7 +144,7 @@ public final class Topology {
         }
         for (JSONObject device : devices) {
             if (byId.containsKey(value(device,"deviceID"))) continue;
-            Client c = new Client(); c.name = name(device);
+            Client c = new Client(); c.name = name(device); c.id = value(device,"deviceID");
             List<JSONObject> connections = entries(device,"connections");
             List<JSONObject> interfaces = new ArrayList<>(connections); interfaces.addAll(entries(device,"knownInterfaces"));
             String inventoryParent=first(connections,"parentDeviceID");

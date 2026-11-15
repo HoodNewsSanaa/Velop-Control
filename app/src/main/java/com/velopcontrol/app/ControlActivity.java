@@ -51,6 +51,8 @@ public final class ControlActivity extends Activity {
     private final ExecutorService discoveryWorker=Executors.newSingleThreadExecutor();
     private java.util.concurrent.atomic.AtomicBoolean discovery;private boolean autoLocated;
     private EditText loginAddress;private TextView loginDiscovery;
+    /** Identifies the tool screen on display; polls stop as soon as the user leaves it. */
+    private String screenKey;
     private String selectedHost="",tab="Overview",notice="",scope="All devices",nodeFilter="",clientQuery="";
     private boolean busy,resumed,auto,management,bridge,bridgeKnown,validating;
     private volatile boolean cancelled;
@@ -65,8 +67,10 @@ public final class ControlActivity extends Activity {
         auto=preferences.getBoolean("auto",false);login("");
         if(preferences.getBoolean("updateChecks",true)&&System.currentTimeMillis()-preferences.getLong("lastUpdateCheck",0)>8L*3600000)checkUpdates(false);
     }
+    private ScrollView scroller;private String scrollerTitle;
     private void chrome(String title,boolean navigation){
-        showingUpdates=false;showingOnboarding=false;loginAddress=null;loginDiscovery=null;
+        int keepScroll=scroller!=null&&title.equals(scrollerTitle)?scroller.getScrollY():0;
+        showingUpdates=false;showingOnboarding=false;loginAddress=null;loginDiscovery=null;screenKey=null;
         ui=new Ui(this,preferences.getBoolean("dark",true));frame=ui.column();frame.setBackgroundColor(ui.bg);setContentView(frame);
         frame.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
         getWindow().setStatusBarColor(ui.bg);getWindow().setNavigationBarColor(ui.surface);
@@ -79,7 +83,8 @@ public final class ControlActivity extends Activity {
         LinearLayout middle=ui.row();middle.setGravity(Gravity.TOP);frame.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
         boolean wide=getResources().getConfiguration().screenWidthDp>=720;
         if(navigation&&wide)middle.addView(navigation(true),new LinearLayout.LayoutParams(ui.d(150),-1));
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);page=ui.column();page.setPadding(ui.d(20),ui.d(14),ui.d(20),ui.d(28));scroll.addView(page,new ScrollView.LayoutParams(-1,-2));middle.addView(scroll,new LinearLayout.LayoutParams(0,-1,1));
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroller=scroll;scrollerTitle=title;
+        if(keepScroll>0)scroll.getViewTreeObserver().addOnGlobalLayoutListener(new android.view.ViewTreeObserver.OnGlobalLayoutListener(){public void onGlobalLayout(){scroll.getViewTreeObserver().removeOnGlobalLayoutListener(this);scroll.scrollTo(0,keepScroll);}});page=ui.column();page.setPadding(ui.d(20),ui.d(14),ui.d(20),ui.d(28));scroll.addView(page,new ScrollView.LayoutParams(-1,-2));middle.addView(scroll,new LinearLayout.LayoutParams(0,-1,1));
         if(navigation&&!wide)frame.addView(navigation(false),new LinearLayout.LayoutParams(-1,ui.d(64)));
     }
     private View navigation(boolean vertical){
@@ -286,7 +291,8 @@ public final class ControlActivity extends Activity {
     }
     private void device(Topology.Client c){
         detail(c.name,this::showTab);LinearLayout card=ui.card();key(card,"IP address",c.ip);key(card,"MAC address",c.mac);key(card,"Access point",topology.nodeName(c.nodeId));key(card,"Connection",c.type);key(card,"Status",c.seen?"Reported connected":"No current connection report");key(card,"Signal",c.rssi==null||c.rssi.isEmpty()?"Not reported":c.rssi+" dBm");key(card,"Negotiated rate",c.rate==null||c.rate.isEmpty()?"Not reported":c.rate+" Mbps");key(card,"Router observation time",c.timestamp);page.addView(card);
-        if(preferences.getBoolean("history",false)&&!topology.demo)ui.action(page,"Connection history",false,()->showHistory(c.mac));ui.note(page,"Signal, rate and association are last reported values. Stock firmware does not provide confirmed per-device internet usage counters here.");
+        if(preferences.getBoolean("history",false)&&!topology.demo)ui.action(page,"Connection history",false,()->showHistory(c.mac));
+        if(!c.seen&&!topology.demo&&!c.id.isEmpty())ui.action(page,"Remove from device list…",false,()->deleteDevice(c));ui.note(page,"Signal, rate and association are last reported values. Stock firmware does not provide confirmed per-device internet usage counters here.");
     }
     private JnapClient selected(){return sessions.get(selectedHost);}
     private void settings(){
@@ -341,7 +347,7 @@ public final class ControlActivity extends Activity {
         ui.action(app,"View connection history",false,()->showHistory(null));ui.action(app,"Clear local history",false,()->ui.dialog("Clear connection history?").setNegativeButton("Keep",null).setPositiveButton("Clear",(d,w)->task("Clearing local history…",()->{history.clear();return true;},r->toast("Local history cleared"))).show());Switch remembered=ui.toggle("Remember passwords on this device",preferences.getBoolean("remember",true));app.addView(remembered);remembered.setOnCheckedChangeListener((button,on)->{preferences.edit().putBoolean("remember",on).apply();if(!on)vault.forgetAll();});
         ui.action(app,"Forget saved passwords",false,()->ui.dialog("Forget saved passwords?").setMessage("Current sessions stay connected. You will need the passwords on your next connection.").setNegativeButton("Keep",null).setPositiveButton("Forget",(d,w)->{vault.forgetAll();toast("Saved passwords removed");}).show());
         ui.action(app,"App updates",false,this::updates);page.addView(app);
-        LinearLayout diagnostics=ui.card();ui.heading(diagnostics,"Network tools");ui.action(diagnostics,"Add mesh nodes…",false,this::onboardingScreen);ui.action(diagnostics,"Neighbor signals & steering…",false,this::neighborSignals);ui.action(diagnostics,"Ping from selected router",false,this::ping);ui.action(diagnostics,"Optimize wireless channels…",false,this::optimize);ui.action(diagnostics,"Change local admin password…",false,this::changePassword);ui.action(diagnostics,"API capability results",false,this::capabilities);page.addView(diagnostics);
+        LinearLayout diagnostics=ui.card();ui.heading(diagnostics,"Network tools");ui.action(diagnostics,"Add mesh nodes…",false,this::onboardingScreen);ui.action(diagnostics,"Neighbor signals & steering…",false,this::neighborSignals);ui.action(diagnostics,"Ping from selected router",false,this::ping);ui.action(diagnostics,"Channel finder…",false,this::channelFinder);ui.action(diagnostics,"Speed check…",false,this::speedCheck);ui.action(diagnostics,"Traceroute from selected router",false,this::traceroute);ui.action(diagnostics,"WPS pairing…",false,this::wpsPairing);ui.action(diagnostics,"Firmware update…",false,this::firmwareUpdate);ui.action(diagnostics,"Router logs…",false,this::routerLogs);ui.action(diagnostics,"Change local admin password…",false,this::changePassword);ui.action(diagnostics,"API capability results",false,this::capabilities);page.addView(diagnostics);
         LinearLayout about=ui.card();ui.heading(about,"Velop Control "+BuildConfig.VERSION_NAME);ui.text(about,"Independent Android client for stock Linksys mesh routers. Local JNAP over pinned HTTPS. GitHub is contacted only for app updates. No advertisements, WebView or separate backend.",14,ui.muted);ui.text(about,"Read support is firmware-dependent. Manual parent locking, node removal, full backup/restore and cloud subscription features are unavailable in this build.",13,ui.muted);ui.action(about,"Disconnect",false,()->{disconnect();login("");});page.addView(about);
     }
     private String onboardingKey(JnapClient session){return "onboardingPending:"+session.host();}
@@ -577,8 +583,218 @@ public final class ControlActivity extends Activity {
         AlertDialog d=ui.dialog("Ping from "+session.host()).setView(body).setNegativeButton("Cancel",null).setPositiveButton("Review",null).create();d.setOnShowListener(v->d.getButton(-1).setOnClickListener(b->{String value=host.getText().toString().trim();if(!value.matches("[A-Za-z0-9][A-Za-z0-9.-]{0,252}")){host.setError("Enter an IPv4 address or hostname");return;}d.dismiss();confirm("Run router ping?","Send four small ICMP echo requests from "+session.host()+" to "+value+". This is an active diagnostic.",false,()->task("Starting router ping…",()->{JSONObject r=session.write("diagnostics/StartPing",new JSONObject().put("host",value).put("packetSizeBytes",64).put("pingCount",4));SettingsRepository.requireOK(r);return true;},r->pollPing(session,0)));}));d.show();
     }
     private void pollPing(JnapClient session,int count){main.postDelayed(()->{if(isDestroyed()||!sessions.containsValue(session))return;task("Reading router ping result…",()->session.read("diagnostics/GetPingStatus",true),r->{detail("Router ping",this::showTab);showSafeValues(page,r.optJSONObject("output"),0);if(count<3)ui.action(page,"Read ping status again",false,()->pollPing(session,count+1));});},1500);}
-    private void optimize(){
-        if(!controls())return;if(primary==null)return;confirm("Optimize wireless channels?","The primary mesh node will start automatic channel selection. Wireless clients and backhaul links may disconnect while the firmware scans and retunes radios. Parent selection stays automatic.",true,()->task("Starting channel optimization once…",()->{SettingsRepository.requireOK(primary.write("nodes/setup/StartAutoChannelSelection",new JSONObject()));return true;},r->message("Optimization requested","Allow the mesh to settle, then refresh. The app will not repeat the request.")));
+
+    // ---- Stock-app tools: channel finder, speed check, traceroute, WPS, firmware, logs ----------
+    /** Repeats a read every delayMs while screen {@code key} stays open. Errors are passed on, never retried as writes. */
+    private void quietPoll(String key,long delayMs,Callable<JSONObject> read,Consumer<JSONObject> ok,Consumer<Exception> fail){
+        main.postDelayed(()->{
+            if(!key.equals(screenKey)||isDestroyed()||!resumed)return;
+            if(busy){quietPoll(key,delayMs,read,ok,fail);return;}
+            int ticket=generation;
+            worker.execute(()->{JSONObject r=null;Exception err=null;try{r=read.call();}catch(Exception e){err=e;}final JSONObject res=r;final Exception e2=err;
+                main.post(()->{if(ticket!=generation||isDestroyed()||!key.equals(screenKey))return;if(e2!=null)fail.accept(e2);else ok.accept(res);});});
+        },delayMs);
+    }
+    /** Polls stop while the app is in the background; pick up the active one again. */
+    private void resumeToolPolls(){
+        if(screenKey==null)return;
+        switch(screenKey){case "channels":if(channelScan)pollChannels();break;case "speed":if(speedRunning)pollSpeed();break;case "trace":if(traceRunning)pollTrace();break;case "wps":if(wpsActive)pollWps();break;default:}
+    }
+    private long since(long start){return (SystemClock.elapsedRealtime()-start)/1000;}
+
+    private NetworkTools.Channels channelsBefore,channelsNow;private boolean channelScan;private long channelScanStarted;private String channelNote="";
+    private void channelFinder(){
+        if(topology==null)return;
+        if(topology.demo){channelsBefore=NetworkTools.channels(NetworkTools.demoChannels(topology,false),topology);channelsNow=NetworkTools.channels(NetworkTools.demoChannels(topology,true),topology);channelScan=false;channelNote="Demo: sample channels before and after a channel finder run.";renderChannels();return;}
+        if(primary==null){message("Connect first","Channel finder runs on the primary node.");return;}
+        JnapClient s=primary;Topology t=topology;
+        task("Reading current channels…",()->NetworkTools.channels(s.read(NetworkTools.CHANNELS,true),t),c->{channelsNow=c;if(!channelScan)channelsBefore=null;
+            if(c.running&&!channelScan){channelScan=true;channelScanStarted=SystemClock.elapsedRealtime();channelNote="A channel scan is already running. Waiting for it to finish.";}
+            renderChannels();if(channelScan)pollChannels();});
+    }
+    private void renderChannels(){
+        detail("Channel finder",this::showTab);screenKey="channels";
+        ui.note(page,"Channel finder asks every node to scan for interference and pick the clearest channel on each radio, like the stock app. Wi-Fi and wireless backhaul links drop for about a minute while radios retune. Channels 52–144 are DFS channels: a radio must leave them for about a minute if it detects radar.");
+        if(!channelNote.isEmpty())ui.note(page,channelNote);
+        if(channelScan)ui.text(page,"Scanning… "+since(channelScanStarted)+" s elapsed. Checking every 10 seconds; the request is never repeated.",14,ui.warning);
+        if(channelsNow!=null){
+            if(channelsNow.radios.isEmpty())ui.note(page,"The primary reported no node radios. Nodes report their channels while online; refresh the mesh and reload.");
+            String node=null;LinearLayout card=null;
+            for(NetworkTools.Radio r:channelsNow.radios){
+                if(!r.node.equals(node)){if(card!=null)page.addView(card);card=ui.card();ui.heading(card,r.node);node=r.node;}
+                Integer before=NetworkTools.previous(channelsBefore,r);boolean changed=before!=null&&before!=r.channel;
+                ui.text(card,r.label()+" · channel "+(r.channel==0?"not reported":String.valueOf(r.channel))+(r.dfs()?" · DFS":"")+(changed?" · was "+before:""),14,changed?ui.accent:ui.text);
+            }
+            if(card!=null)page.addView(card);
+        }
+        if(!topology.demo&&!channelScan){ui.action(page,"Find best channels…",true,this::startChannelScan);ui.action(page,"Reload channels",false,this::channelFinder);}
+    }
+    private void startChannelScan(){
+        if(!controls()||primary==null)return;JnapClient s=primary;
+        confirm("Run channel finder?","Every node scans and may move its radios to new channels. Wireless devices and wireless backhaul links disconnect for about a minute. The request is sent once.",true,()->{NetworkTools.Channels before=channelsNow;
+            task("Starting channel finder once…",()->{SettingsRepository.requireOK(s.write(NetworkTools.CHANNEL_START,new JSONObject()));return true;},r->{channelsBefore=before;channelScan=true;channelScanStarted=SystemClock.elapsedRealtime();channelNote="Channel finder started. Your phone may lose Wi-Fi briefly; keep this screen open.";renderChannels();pollChannels();});});
+    }
+    private void pollChannels(){
+        JnapClient s=primary;Topology t=topology;if(s==null)return;
+        quietPoll("channels",10000,()->s.read(NetworkTools.CHANNELS,true),r->{
+            NetworkTools.Channels c=null;try{c=NetworkTools.channels(r,t);}catch(Exception ignored){}
+            if(c!=null&&!c.running){channelScan=false;channelsNow=c;channelNote=channelsBefore==null?"Channel finder finished.":"Channel finder finished. Changed channels are highlighted with their previous channel.";renderChannels();return;}
+            continueChannelPoll();
+        },e->{if(e instanceof SecurityException){channelScan=false;channelNote=safeMessage(e);renderChannels();return;}continueChannelPoll();});
+    }
+    private void continueChannelPoll(){
+        if(since(channelScanStarted)>300){channelScan=false;channelNote="No finished result after 5 minutes. The mesh may still be settling; reload later. The request was not repeated.";renderChannels();return;}
+        renderChannels();pollChannels();
+    }
+
+    private List<NetworkTools.Speed> speedHistory=new ArrayList<>();private NetworkTools.Speed speedNow;private boolean speedRunning,speedSeenRunning;private long speedStarted;private String speedNote="";
+    private static final String SPEED_HISTORY_QUERY="{\"healthCheckModule\":\"SpeedTest\",\"lastNumberOfResults\":5,\"includeModuleResults\":true}";
+    private void speedCheck(){
+        if(topology==null)return;
+        if(topology.demo){speedHistory=new ArrayList<>();speedNow=null;speedRunning=false;speedNote="Demo: connect to run the router's speed check.";renderSpeed();return;}
+        if(primary==null){message("Connect first","Speed check runs on the primary node.");return;}
+        JnapClient s=primary;
+        task("Reading speed check results…",()->NetworkTools.speedHistory(s.query(NetworkTools.SPEED_RESULTS,new JSONObject(SPEED_HISTORY_QUERY))),h->{speedHistory=h;renderSpeed();if(speedRunning)pollSpeed();});
+    }
+    private void renderSpeed(){
+        detail("Speed check",this::showTab);screenKey="speed";
+        ui.note(page,"Runs the router's built-in Speedtest by Ookla from the primary node. It measures the internet connection at the router, not your Wi-Fi, and uses several hundred megabytes of data. Results are stored on the router.");
+        if(!speedNote.isEmpty())ui.note(page,speedNote);
+        if(speedRunning)ui.text(page,"Testing… "+since(speedStarted)+" s elapsed",14,ui.warning);
+        if(speedNow!=null)speedCard("Current test",speedNow);
+        for(int i=0;i<speedHistory.size();i++)speedCard(i==0&&!speedRunning&&speedNow==null?"Last test":"Earlier test",speedHistory.get(i));
+        if(speedHistory.isEmpty()&&speedNow==null&&!speedRunning&&!topology.demo)ui.note(page,"No stored results yet.");
+        if(!topology.demo){if(speedRunning)ui.action(page,"Stop speed check",false,this::stopSpeed);else{ui.action(page,"Run speed check…",true,this::startSpeed);ui.action(page,"Reload results",false,this::speedCheck);}}
+    }
+    private void speedCard(String title,NetworkTools.Speed r){
+        LinearLayout card=ui.card();ui.heading(card,title);key(card,"Result",NetworkTools.describe(r.state));key(card,"Download",r.down());key(card,"Upload",r.up());key(card,"Latency",r.latencyMs>0?r.latencyMs+" ms":"—");
+        if(!r.server.isEmpty())key(card,"Speedtest server ID",r.server);if(!r.timestamp.isEmpty())key(card,"Time (UTC)",r.timestamp);page.addView(card);
+    }
+    private void startSpeed(){
+        if(!controls()||primary==null)return;JnapClient s=primary;
+        confirm("Run speed check?","The primary router runs Speedtest by Ookla over your internet connection for about 30–60 seconds and stores the result. Other traffic may slow down during the test.",false,()->
+            task("Starting speed check once…",()->{SettingsRepository.requireOK(s.write(NetworkTools.SPEED_RUN,new JSONObject().put("runHealthCheckModule","SpeedTest")));return true;},r->{speedRunning=true;speedSeenRunning=false;speedNow=null;speedStarted=SystemClock.elapsedRealtime();speedNote="";renderSpeed();pollSpeed();}));
+    }
+    private void pollSpeed(){
+        JnapClient s=primary;if(s==null)return;
+        quietPoll("speed",5000,()->s.read(NetworkTools.SPEED_STATUS,true),r->{
+            NetworkTools.Speed now=null;boolean parsed=true;try{now=NetworkTools.speedStatus(r);}catch(Exception e){parsed=false;}
+            boolean pending=parsed&&now==null&&!speedSeenRunning&&since(speedStarted)<20;
+            if(parsed&&!pending&&(now==null||!now.running)){speedRunning=false;speedNow=now;finishSpeed();return;}
+            if(now!=null){speedNow=now;speedSeenRunning=true;}
+            if(since(speedStarted)>180){speedRunning=false;speedNote="No result after 3 minutes. Reload results later.";renderSpeed();return;}
+            renderSpeed();pollSpeed();
+        },e->{if(e instanceof SecurityException||since(speedStarted)>180){speedRunning=false;speedNote=safeMessage(e);renderSpeed();return;}renderSpeed();pollSpeed();});
+    }
+    private void finishSpeed(){
+        JnapClient s=primary;if(s==null){renderSpeed();return;}
+        task("Reading the result…",()->NetworkTools.speedHistory(s.query(NetworkTools.SPEED_RESULTS,new JSONObject(SPEED_HISTORY_QUERY))),h->{speedHistory=h;if(speedNow!=null&&speedNow.succeeded()&&!h.isEmpty())speedNow=null;renderSpeed();});
+    }
+    private void stopSpeed(){
+        JnapClient s=primary;if(s==null)return;
+        task("Stopping speed check…",()->{SettingsRepository.requireOK(s.write(NetworkTools.SPEED_STOP,new JSONObject()));return true;},r->{speedRunning=false;speedNote="Speed check stopped.";speedCheck();});
+    }
+
+    private String traceLog="",traceNote="";private boolean traceRunning;private long traceStarted;private JnapClient traceSession;
+    private void traceroute(){
+        if(!controls())return;JnapClient session=selected();if(session==null){message("Select a node","Choose a connected target in Settings.");return;}
+        EditText host=ui.input("IPv4 address or DNS hostname","1.1.1.1",false);LinearLayout body=ui.column();body.setPadding(ui.d(22),0,ui.d(22),0);body.addView(host);
+        AlertDialog d=ui.dialog("Traceroute from "+session.host()).setView(body).setNegativeButton("Cancel",null).setPositiveButton("Start",null).create();
+        d.setOnShowListener(v->d.getButton(-1).setOnClickListener(b->{String value=host.getText().toString().trim();if(!NetworkTools.validHost(value)){host.setError("Enter an IPv4 address or hostname");return;}d.dismiss();
+            task("Starting traceroute…",()->{SettingsRepository.requireOK(session.write(NetworkTools.TRACE_START,new JSONObject().put("host",value)));return true;},r->{traceSession=session;traceRunning=true;traceLog="";traceNote="Tracing the route to "+value+" from "+session.host()+".";traceStarted=SystemClock.elapsedRealtime();renderTrace();pollTrace();});}));d.show();
+    }
+    private void renderTrace(){
+        detail("Traceroute",this::showTab);screenKey="trace";ui.note(page,traceNote);
+        if(traceRunning)ui.text(page,"Running… "+since(traceStarted)+" s",14,ui.warning);
+        LinearLayout card=ui.card();TextView out=ui.text(card,traceLog.isEmpty()?"No hops reported yet.":traceLog,13,ui.text);out.setTypeface(android.graphics.Typeface.MONOSPACE);page.addView(card);
+        if(traceRunning&&traceSession!=null)ui.action(page,"Stop traceroute",false,()->{JnapClient s=traceSession;task("Stopping traceroute…",()->{SettingsRepository.requireOK(s.write(NetworkTools.TRACE_STOP,new JSONObject()));return true;},r->{traceRunning=false;renderTrace();});});
+    }
+    private void pollTrace(){
+        JnapClient s=traceSession;if(s==null)return;
+        quietPoll("trace",3000,()->s.read(NetworkTools.TRACE_STATUS,true),r->{
+            try{NetworkTools.Trace t=NetworkTools.trace(r);traceLog=t.log;traceRunning=t.running;}catch(Exception e){traceRunning=false;traceNote=safeMessage(e);}
+            if(traceRunning&&since(traceStarted)>120){traceRunning=false;traceNote+=" Stopped watching after 2 minutes.";}
+            renderTrace();if(traceRunning)pollTrace();
+        },e->{traceRunning=false;traceNote=safeMessage(e);renderTrace();});
+    }
+
+    private boolean wpsActive;private long wpsStarted;private String wpsNote="";
+    private void wpsPairing(){
+        if(topology==null)return;
+        if(topology.demo){wpsActive=false;wpsNote="Demo: connect to start WPS pairing on the primary node.";renderWps();return;}
+        if(primary==null){message("Connect first","WPS pairing runs on the primary node.");return;}
+        if(!wpsActive)wpsNote="";renderWps();if(wpsActive)pollWps();
+    }
+    private void renderWps(){
+        detail("WPS pairing",this::showTab);screenKey="wps";
+        ui.note(page,"Push-button WPS lets a printer or other WPS device join your main Wi-Fi without typing the password. Start pairing here, then press the WPS button on the device within 2 minutes. WPS must be enabled under Settings → WPS.");
+        if(!wpsNote.isEmpty())ui.note(page,wpsNote);
+        if(wpsActive)ui.text(page,"Waiting for a device… "+since(wpsStarted)+" s",14,ui.warning);
+        if(topology.demo)return;
+        if(wpsActive)ui.action(page,"Stop pairing",false,()->{JnapClient s=primary;if(s==null)return;task("Stopping WPS pairing…",()->{SettingsRepository.requireOK(s.write(NetworkTools.WPS_STOP,new JSONObject()));return true;},r->{wpsActive=false;wpsNote="Pairing stopped.";renderWps();});});
+        else ui.action(page,"Start WPS pairing…",true,this::startWps);
+    }
+    private void startWps(){
+        if(!controls()||primary==null)return;JnapClient s=primary;
+        confirm("Start WPS pairing?","For the next 2 minutes, any device that presses its WPS button nearby can join your main Wi-Fi.",false,()->
+            task("Starting WPS pairing…",()->{JSONObject a=s.read(NetworkTools.WPS_AVAILABLE,true);SettingsRepository.requireOK(a);
+                if(!Topology.object(a,"output").optBoolean("available"))throw new IllegalStateException("WPS is not available. Enable it under Settings → WPS, and note that WPS does not work with WPA3-only security.");
+                SettingsRepository.requireOK(s.write(NetworkTools.WPS_START,new JSONObject()));return true;},
+                r->{wpsActive=true;wpsStarted=SystemClock.elapsedRealtime();wpsNote="Press the WPS button on your device now.";renderWps();pollWps();}));
+    }
+    private void pollWps(){
+        JnapClient s=primary;if(s==null)return;
+        quietPoll("wps",5000,()->s.read(NetworkTools.WPS_STATUS,true),r->{
+            NetworkTools.Wps w;try{w=NetworkTools.wps(r);}catch(Exception e){wpsActive=false;wpsNote=safeMessage(e);renderWps();return;}
+            if(!w.inProgress||since(wpsStarted)>130){wpsActive=false;wpsNote=w.result.equals("Succeeded")?"A device joined using WPS.":w.result.equals("Failed")?"WPS pairing failed or timed out.":"The pairing window ended without a reported result.";renderWps();return;}
+            renderWps();pollWps();
+        },e->{wpsActive=false;wpsNote=safeMessage(e);renderWps();});
+    }
+
+    private void firmwareUpdate(){
+        if(topology==null)return;
+        if(topology.demo){message("Demo","Connect to check for and install firmware updates.");return;}
+        if(primary==null){message("Connect first","Firmware updates are managed by the primary node.");return;}
+        JnapClient s=primary;
+        task("Reading firmware status…",()->s.read(NetworkTools.FIRMWARE_STATUS,true),r->{
+            detail("Firmware update",this::showTab);screenKey="firmware";
+            ui.note(page,"Uses the stock firmware's own Linksys update service for every node, like the stock app. Installing restarts each node; the whole network is offline for several minutes.");
+            LinearLayout card=ui.card();ui.heading(card,"Current status");key(card,"Result",SettingsRepository.safeCode(r.optString("result")));showSafeValues(card,r.optJSONObject("output"),0);page.addView(card);
+            ui.action(page,"Check for updates now",false,()->firmwareNow(true));
+            ui.action(page,"Install available update now…",true,()->firmwareNow(false));
+            ui.action(page,"Reload status",false,this::firmwareUpdate);
+        });
+    }
+    private void firmwareNow(boolean onlyCheck){
+        if(!controls()||primary==null)return;JnapClient s=primary;
+        Runnable send=()->task(onlyCheck?"Asking the router to check for updates…":"Starting the firmware update once…",()->{SettingsRepository.requireOK(s.write(NetworkTools.FIRMWARE_NOW,new JSONObject().put("onlyCheck",onlyCheck)));return true;},
+            r->message(onlyCheck?"Update check requested":"Update started",onlyCheck?"The router is contacting the Linksys update service. Reload the status in a minute.":"If an update is available, nodes download and install it, then restart. Keep them powered. The app will lose its connection; reconnect when the network is back."));
+        if(onlyCheck)confirm("Check for firmware updates?","The primary asks the Linksys update service whether newer firmware exists. Nothing is installed.",false,send);
+        else confirm("Install firmware now?","If newer firmware is available, every node downloads and installs it and restarts. The network is offline for several minutes. Do not unplug any node.",true,send);
+    }
+
+    private void routerLogs(){
+        if(topology==null)return;
+        if(topology.demo){message("Demo","Connect to read the router's logs.");return;}
+        if(primary==null){message("Connect first","Logs are read from the primary node.");return;}
+        detail("Router logs",this::showTab);screenKey="logs";
+        ui.note(page,"Read-only views of the primary's logs. Entries appear only while logging is enabled under Settings → Router logging. Entries can include device IP addresses.");
+        for(Map.Entry<String,String> e:NetworkTools.LOGS.entrySet())ui.action(page,e.getKey(),false,()->showLog(e.getKey(),e.getValue()));
+        ui.action(page,"Clear router logs…",false,()->{if(!controls())return;JnapClient s=primary;confirm("Clear router logs?","Deletes the log entries stored on the primary.",false,()->task("Clearing router logs…",()->{SettingsRepository.requireOK(s.write(NetworkTools.LOG_DELETE,new JSONObject()));return true;},r->toast("Router logs cleared")));});
+    }
+    private void showLog(String title,String action){
+        JnapClient s=primary;if(s==null)return;
+        task("Reading "+title.toLowerCase(Locale.ROOT)+"…",()->NetworkTools.logEntries(s.query(action,new JSONObject().put("firstEntryIndex",1).put("entryCount",100))),entries->{
+            detail(title,this::routerLogs);
+            if(entries.isEmpty())ui.note(page,"No entries. Check that logging is enabled under Settings → Router logging.");
+            for(String line:entries){LinearLayout card=ui.card();ui.text(card,line,13,ui.text);page.addView(card);}
+        });
+    }
+
+    private void deleteDevice(Topology.Client c){
+        if(!controls()||primary==null)return;JnapClient s=primary;
+        confirm("Remove "+c.name+"?","Removes this offline device and its custom name from the router's device list, like the stock app. If it connects again it reappears as a new device.",false,()->
+            task("Removing device…",()->{SettingsRepository.requireOK(s.write(NetworkTools.DELETE_DEVICE,new JSONObject().put("deviceID",c.id)));return true;},r->{back=null;tab="Devices";refresh();message("Device removed",c.name+" was removed from the router's device list.");}));
     }
     private void changePassword(){
         if(!controls())return;JnapClient session=selected();if(session==null){message("Select a node","Choose a connected target in Settings.");return;}LinearLayout body=ui.column();body.setPadding(ui.d(22),0,ui.d(22),0);EditText next=ui.input("New local admin password","",true),again=ui.input("Repeat password","",true),hint=ui.input("Password hint (optional)","",false);body.addView(next);body.addView(again);body.addView(hint);
@@ -651,10 +867,10 @@ public final class ControlActivity extends Activity {
     private void message(String title,String text){if(!isFinishing()&&!isDestroyed())ui.dialog(title).setMessage(text).setPositiveButton("OK",null).show();}
     private void toast(String text){Toast.makeText(this,text,Toast.LENGTH_SHORT).show();}
     private void schedule(){main.removeCallbacks(poll);if(auto&&resumed&&primary!=null&&!validating)main.postDelayed(poll,30000);}
-    private void disconnect(){generation++;cancelled=true;validating=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);main.removeCallbacks(onboardingPoll);onboarding=null;onboardingSession=null;onboardingChecking=false;onboardingMessage="";restart=null;restartSession=null;restartChecking=false;for(JnapClient c:sessions.values())c.close();sessions.clear();primary=null;topology=null;latest.clear();pageStatus.clear();health.clear();selectedHost="";management=false;busy=false;back=null;notice="";nodeFilter="";clientQuery="";scope="All devices";audit=null;exportText=null;}
+    private void disconnect(){generation++;cancelled=true;validating=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);main.removeCallbacks(onboardingPoll);onboarding=null;onboardingSession=null;onboardingChecking=false;onboardingMessage="";restart=null;restartSession=null;restartChecking=false;screenKey=null;channelScan=false;channelsBefore=null;channelsNow=null;channelNote="";speedRunning=false;speedNow=null;speedHistory=new ArrayList<>();speedNote="";traceRunning=false;traceSession=null;wpsActive=false;wpsNote="";for(JnapClient c:sessions.values())c.close();sessions.clear();primary=null;topology=null;latest.clear();pageStatus.clear();health.clear();selectedHost="";management=false;busy=false;back=null;notice="";nodeFilter="";clientQuery="";scope="All devices";audit=null;exportText=null;}
     @Override public void onBackPressed(){if(back!=null){Runnable action=back;back=null;action.run();}else if(topology!=null&&!tab.equals("Overview")){tab="Overview";showTab();}else if(topology!=null){ui.dialog("Disconnect from your mesh?").setNegativeButton("Stay",null).setPositiveButton("Disconnect",(d,w)->{disconnect();login("");}).show();}else super.onBackPressed();}
     @Override public void onConfigurationChanged(Configuration configuration){super.onConfigurationChanged(configuration);if(showingOnboarding)onboardingScreen();else if(back==null){if(topology==null)login("");else showTab();}}
-    @Override protected void onResume(){super.onResume();resumed=true;schedule();scheduleRestart();scheduleOnboarding();}
+    @Override protected void onResume(){super.onResume();resumed=true;schedule();scheduleRestart();scheduleOnboarding();resumeToolPolls();}
     @Override protected void onPause(){resumed=false;main.removeCallbacks(poll);main.removeCallbacks(restartPoll);main.removeCallbacks(onboardingPoll);super.onPause();}
     @Override protected void onDestroy(){if(discovery!=null)discovery.set(true);disconnect();worker.shutdownNow();updateWorker.shutdownNow();discoveryWorker.shutdownNow();history.close();super.onDestroy();}
 }

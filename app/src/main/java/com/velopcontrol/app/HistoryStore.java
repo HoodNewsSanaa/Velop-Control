@@ -7,19 +7,26 @@ import java.util.*;
 
 /** Optional, app-private seven-day association history. No router passwords or settings. */
 public final class HistoryStore extends SQLiteOpenHelper {
-    private final Map<String,String> previous=new HashMap<>();
+    private final Map<String,String> previous=new HashMap<>();private boolean seeded;
     public HistoryStore(Context c){super(c,"mesh-history.db",null,1);}
     public void onCreate(SQLiteDatabase db){db.execSQL("CREATE TABLE events (ts INTEGER, device TEXT, label TEXT, node TEXT, state TEXT)");db.execSQL("CREATE INDEX event_time ON events(ts)");db.execSQL("CREATE TABLE samples (ts INTEGER, nodes INTEGER, clients INTEGER)");}
     public void onUpgrade(SQLiteDatabase db,int old,int now){}
     public synchronized void record(Topology t){
-        if(t.demo)return;SQLiteDatabase db=getWritableDatabase();long now=System.currentTimeMillis();long cutoff=now-7L*86400000;
+        if(t.demo)return;SQLiteDatabase db=getWritableDatabase();seed(db);long now=System.currentTimeMillis();long cutoff=now-7L*86400000;
         Map<String,String> recorded=new HashMap<>();db.beginTransaction();try{
             ContentValues sample=new ContentValues();sample.put("ts",now);sample.put("nodes",(int)t.nodes.stream().filter(n->n.seen).count());sample.put("clients",(int)t.clients.stream().filter(c->c.seen).count());db.insert("samples",null,sample);
-            for(Topology.Client c:t.clients){String key=c.mac==null?"":c.mac;if(key.isEmpty())continue;String state=c.seen?"Reported connected":"No connection reported";String node=c.nodeId==null?"":c.nodeId;String signature=state+":"+node;
+            for(Topology.Client c:t.clients){String key=c.mac==null?"":c.mac;if(key.isEmpty())continue;String state=c.seen?"Reported connected":"No connection reported";String signature=state+":"+(c.seen?t.nodeName(c.nodeId):"");
                 if(!signature.equals(previous.get(key))){ContentValues event=new ContentValues();event.put("ts",now);event.put("device",key);event.put("label",c.name);event.put("node",c.seen?t.nodeName(c.nodeId):"");event.put("state",state);db.insertOrThrow("events",null,event);recorded.put(key,signature);}
             }
             db.delete("events","ts < ?",new String[]{String.valueOf(cutoff)});db.delete("samples","ts < ?",new String[]{String.valueOf(cutoff)});db.setTransactionSuccessful();
         }finally{db.endTransaction();}previous.putAll(recorded);
+    }
+    /** Last stored state per device (same signature as record) so history continues across app launches. */
+    private void seed(SQLiteDatabase db){
+        if(seeded)return;seeded=true;
+        try(Cursor c=db.rawQuery("SELECT device,state,node FROM events e WHERE ts=(SELECT MAX(ts) FROM events WHERE device=e.device)",null)){
+            while(c.moveToNext())previous.put(c.getString(0),c.getString(1)+":"+(c.isNull(2)?"":c.getString(2)));
+        }
     }
     public synchronized List<String> recent(String device){
         List<String> out=new ArrayList<>();String cutoff=String.valueOf(System.currentTimeMillis()-7L*86400000);String filter=device==null?"ts >= ?":"ts >= ? AND device = ?";String[] args=device==null?new String[]{cutoff}:new String[]{cutoff,device};
@@ -28,5 +35,5 @@ public final class HistoryStore extends SQLiteOpenHelper {
             while(c.moveToNext())out.add(format.format(new Date(c.getLong(0)))+" · "+c.getString(1)+"\n"+c.getString(3)+(c.getString(2).isEmpty()?"":" · "+c.getString(2)));
         }return out;
     }
-    public synchronized void clear(){SQLiteDatabase db=getWritableDatabase();db.delete("events",null,null);db.delete("samples",null,null);previous.clear();}
+    public synchronized void clear(){SQLiteDatabase db=getWritableDatabase();db.delete("events",null,null);db.delete("samples",null,null);previous.clear();seeded=true;}
 }

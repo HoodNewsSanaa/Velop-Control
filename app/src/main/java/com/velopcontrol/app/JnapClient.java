@@ -106,6 +106,11 @@ public final class JnapClient implements AutoCloseable, SettingsRepository.Trans
         if(!ReadPolicy.ACTIONS.contains(action)&&!SettingsCatalog.allowsRead(action))throw new IllegalArgumentException("Read action blocked");
         return request(action,new JSONObject(),authenticated);
     }
+    /** Allowlisted read that takes input fields (log ranges, result filters). Always authenticated. */
+    public JSONObject query(String action,JSONObject body) throws Exception {
+        if(!SettingsCatalog.allowsRead(action))throw new IllegalArgumentException("Read action blocked");
+        return request(action,body,true);
+    }
     public JSONObject write(String action,JSONObject body) throws Exception {
         if(!SettingsCatalog.allowsWrite(action))throw new IllegalArgumentException("Write action blocked");
         return request(action,body,true);

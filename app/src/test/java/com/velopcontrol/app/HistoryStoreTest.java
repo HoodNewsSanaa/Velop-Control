@@ -25,5 +25,10 @@ public class HistoryStoreTest {
         ContentValues row=new ContentValues();row.put("ts",System.currentTimeMillis()-8L*86400000);row.put("device","test");row.put("label","old-label");row.put("node","");row.put("state","Reported connected");store.getWritableDatabase().insertOrThrow("events",null,row);
         assertTrue(store.recent(null).isEmpty());assertTrue(store.recent("test").isEmpty());
     }
+    @Test public void relaunchDoesNotLogUnchangedDevicesAgain(){
+        Topology t=Topology.demo();t.demo=false;store.record(t);long initial=count();store.close();
+        store=new HistoryStore(RuntimeEnvironment.getApplication());store.record(t);assertEquals("Same states after a relaunch add no events",initial,count());
+        t.clients.get(0).nodeId="demo-4";store.record(t);assertEquals(initial+1,count());
+    }
     private long count(){try(Cursor c=store.getReadableDatabase().rawQuery("SELECT COUNT(*) FROM events",null)){c.moveToFirst();return c.getLong(0);}}
 }
