@@ -93,7 +93,7 @@ Automatic primary discovery and per-build certificate handling, described below.
 
 ## Changes in 0.8.0
 
-**Tools → Connection drop monitor** runs in the background for 1–4 hours, checking every 5 seconds whether Wi-Fi, the gateway, the primary Velop, the internet and DNS respond (over Wi-Fi only), and which node the phone is on (optional location permission). It then lists each drop with the layer that failed first, node switches and Android pauses, and exports the log as CSV. No passwords or router API requests are used. **121 automated tests pass** and Android lint reports **0 errors**.
+**Tools → Connection drop monitor** runs in the background for 1–4 hours, checking every 5 seconds whether Wi-Fi, the gateway, the primary Velop, the internet and DNS respond (over Wi-Fi only), and which node the phone is on (optional location permission). It then lists each drop with the layer that failed first, node switches and Android pauses, and exports the log as CSV. No passwords or router API requests are used. **Tools → Restart whole network** restarts every node (the firmware propagates a primary restart to all children; nodes stay powered and keep settings). **122 automated tests pass** and Android lint reports **0 errors**.
 
 ## Changes in 0.7.0
 
