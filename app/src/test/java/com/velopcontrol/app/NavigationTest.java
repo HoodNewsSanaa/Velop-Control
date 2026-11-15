@@ -71,4 +71,9 @@ public class NavigationTest {
         if(root instanceof TextView&&((TextView)root).getText().toString().contains(text))return (TextView)root;
         if(root instanceof ViewGroup){ViewGroup g=(ViewGroup)root;for(int i=0;i<g.getChildCount();i++){TextView f=findContaining(g.getChildAt(i),text);if(f!=null)return f;}}return null;
     }
+    @Test public void channelFinderShowsDemoChanges() throws Exception {
+        click("Explore demo");click("Tools");click("Channel finder…");
+        assertNotNull(find(root(),"Channel finder"));assertNotNull(findContaining(root(),"was 100"));screenshot("channel-finder-phone");
+        click("‹ Back");click("Speed check…");assertNotNull(find(root(),"Speed check"));
+    }
 }

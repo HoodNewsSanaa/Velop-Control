@@ -1,6 +1,6 @@
-# Feature coverage — 0.6.0
+# Feature coverage — 0.7.0
 
-38 setting pages: 28 guarded editors, 7 information pages and 3 explicitly unavailable workflows. Additional node actions and diagnostics are described below.
+45 setting pages: 34 guarded editors, 9 information pages and 2 explicitly unavailable workflows (plus the node-setup wizard). Additional node actions and diagnostics are described below.
 
 An editor means the form and request pipeline exist. It does not mean a write has been confirmed on the user’s hardware. Unsupported reads produce an error and never enable a blind write.
 
@@ -12,12 +12,17 @@ An editor means the form and request pipeline exist. It does not mean a write ha
 | Wireless | WPS | Native editor; writes untested |
 | Wireless | MAC filtering | Native editor; writes untested |
 | Wireless | Wireless schedule | Native editor; writes untested |
-| Wireless | DFS capability | Read-only information |
+| Wireless | DFS channels | Native editor; writes untested |
+| Wireless | Airtime fairness | Native editor; writes untested |
+| Wireless | Guest Wi-Fi clients | Read-only information |
 | Network | Internet & bridge mode | Native editor; writes untested |
 | Network | LAN, DHCP & reservations | Native editor; writes untested |
 | Network | IPv6 | Native editor; writes untested |
 | Network | WAN MAC cloning | Native editor; writes untested |
 | Network | NAT & static routes | Native editor; writes untested |
+| Network | Express Forwarding | Native editor; writes untested |
+| Network | IPTV | Native editor; writes untested (may move the LAN to 192.168.10.1) |
+| Network | Routing table | Read-only information |
 | Security | Firewall & VPN passthrough | Native editor; writes untested |
 | Security | SIP ALG | Native editor; writes untested |
 | Security | DMZ | Native editor; writes untested |
@@ -35,6 +40,8 @@ An editor means the form and request pipeline exist. It does not mean a write ha
 | Administration | Automatic firmware updates | Native editor; writes untested |
 | Storage | USB file sharing | Native editor; writes untested |
 | Administration | HomeKit router support | Native editor; writes untested |
+| Administration | Linksys cloud remote access | Native editor; writes untested |
+| Administration | Usage-data sharing | Native editor; writes untested |
 | Storage | Attached USB storage | Read-only information |
 | Network | DHCP leases | Read-only information |
 | Administration | Firmware status | Read-only information |
@@ -53,9 +60,17 @@ An editor means the form and request pipeline exist. It does not mean a write ha
 - Settings: search/grouping, target selector, capability-limited choices, native switches, password controls, time-zone list, half-hour schedules and editable rule/reservation tables.
 - Tools: sequential read-only validation with stop support; JSON export; optional 7-day app-private association history; theme and foreground polling preferences.
 
+## Stock-app tools (0.7.0)
+
+- **Channel finder:** shows every node radio's channel, runs the stock auto-channel selection once, follows progress and highlights changed channels and DFS channels.
+- **Speed check:** runs the router's built-in Speedtest by Ookla on the primary, follows progress and shows download/upload/latency plus the router's stored history. Speeds are shown as Mbps assuming the firmware stores kbit/s.
+- **Traceroute**, **WPS push-button pairing**, **firmware check / install now** (stock update service), **router log viewer** (incoming, outgoing, security, DHCP) with clear, and **removing offline devices** from the device list.
+- Node and client steering are on the Automatic mesh steering page; the firmware has no further steering settings.
+- Not included on purpose: factory reset, node removal and restoring previous firmware (irreversible); node "blink" exists in firmware only for unconfigured nodes during setup; cloud notifications need Linksys cloud services.
+
 ## Additional guarded actions
 
-Rename a mesh node, restart a directly connected node, change that node’s local admin password, request a four-packet router ping, and request automatic wireless channel selection. These actions require management mode and their own confirmation. Disruptive actions also require typing APPLY. Their protocol paths are source-based; no live write has been performed.
+Rename a mesh node, restart a directly connected node, change that node’s local admin password, request a four-packet router ping, run a traceroute, and use the stock-app tools above. These actions require management mode and their own confirmation. Disruptive actions also require typing APPLY. Their protocol paths are source-based; no live write has been performed.
 
 ## Boundaries
 
@@ -64,8 +79,8 @@ Rename a mesh node, restart a directly connected node, change that node’s loca
 - Dynamic DNS is inspectable; provider-specific account editors are not implemented.
 - Existing QoS application rules are preserved, but only device prioritization rules have an editor.
 - No front status-light/night-mode control: the user’s firmware rejected the night-mode getter. The LED editor addresses Ethernet-port LEDs only.
-- No one-click firmware download/install, factory reset or forced recovery. Firmware status and update policy/window are separate supported pages.
-- No WAN speed-test runner or traffic-volume charts. Negotiated link rates and hop metrics are not internet throughput or per-device data usage.
+- Firmware check/install uses the stock Linksys update service (Tools → Firmware update). No firmware file upload, factory reset or forced recovery.
+- Speed check uses the router's built-in Speedtest. No traffic-volume charts. Negotiated link rates and hop metrics are not internet throughput or per-device data usage.
 - IPv4 WAN forms cover DHCP, static, PPPoE, PPTP, L2TP and bridge, limited to advertised modes. Other current types are viewable and preserved but cannot be newly selected. IPv6 has automatic/PPPoE/pass-through choices only when advertised; no tunnel editor.
 - Legacy WEP values can be viewed/edited when already configured; selecting a new WEP configuration is not implemented.
 - No SSH, MQTT commands, firmware replacement or automatic parent steering override.

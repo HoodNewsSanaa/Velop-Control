@@ -314,17 +314,50 @@
   },
   {
     "id": "dfs",
-    "title": "DFS capability",
+    "title": "DFS channels",
     "group": "Wireless",
     "read": "wirelessap/GetDFSSettings",
-    "write": "",
+    "write": "wirelessap/SetDFSSettings",
     "fields": [
       {
-        "path": "isDFSSupported",
-        "label": "DFS supported",
+        "path": "isDFSEnabled",
+        "label": "Allow DFS (radar-detection) 5 GHz channels",
         "type": "bool"
       }
     ],
+    "impact": "Changes apply to the whole mesh. Wireless clients and wireless backhaul links may disconnect while radios retune.",
+    "required": [
+      "isDFSEnabled"
+    ],
+    "disruption": true,
+    "note": "DFS channels add 5 GHz capacity, but a radio must leave its channel for about a minute when it detects radar. Turning DFS off avoids those interruptions. If the firmware reports DFS as unsupported, this page cannot be saved."
+  },
+  {
+    "id": "airtime",
+    "title": "Airtime fairness",
+    "group": "Wireless",
+    "read": "wirelessap/GetAirtimeFairnessSettings",
+    "write": "wirelessap/SetAirtimeFairnessSettings",
+    "fields": [
+      {
+        "path": "isAirtimeFairnessEnabled",
+        "label": "Enable airtime fairness",
+        "type": "bool"
+      }
+    ],
+    "required": [
+      "isAirtimeFairnessEnabled"
+    ],
+    "impact": "Changes apply to the selected router. Wireless clients may reconnect while radios apply the change.",
+    "note": "Shares transmit time more evenly so slow devices do not hold back fast ones. If the firmware reports it as unsupported, this page cannot be saved."
+  },
+  {
+    "id": "guestclients",
+    "title": "Guest Wi-Fi clients",
+    "group": "Wireless",
+    "read": "guestnetwork/GetGuestNetworkClients",
+    "write": "",
+    "fields": [],
     "impact": "Changes apply to the selected router."
   },
   {
@@ -565,7 +598,7 @@
         ]
       }
     ],
-    "impact": "Internet access or router management may disconnect. Reconnect using the router\u2019s new address if it changes.",
+    "impact": "Internet access or router management may disconnect. Reconnect using the router’s new address if it changes.",
     "required": [
       "wanType",
       "mtu"
@@ -1586,6 +1619,44 @@
     "impact": "Changes apply to the selected router."
   },
   {
+    "id": "remoteui",
+    "title": "Linksys cloud remote access",
+    "group": "Administration",
+    "read": "ui/GetRemoteSetting",
+    "write": "ui/SetRemoteSetting",
+    "fields": [
+      {
+        "path": "isEnabled",
+        "label": "Allow remote access through the Linksys cloud",
+        "type": "bool"
+      }
+    ],
+    "required": [
+      "isEnabled"
+    ],
+    "impact": "Changes apply to the selected router.",
+    "note": "Controls the stock firmware's remote management through Linksys cloud services. This app always connects locally and does not use it."
+  },
+  {
+    "id": "datasharing",
+    "title": "Usage-data sharing",
+    "group": "Administration",
+    "read": "core/GetDataUploadUserConsent",
+    "write": "core/SetDataUploadUserConsent",
+    "fields": [
+      {
+        "path": "userConsent",
+        "label": "Share usage data with Linksys",
+        "type": "bool"
+      }
+    ],
+    "required": [
+      "userConsent"
+    ],
+    "impact": "Changes apply to the selected router.",
+    "note": "The router's consent setting for uploading usage and diagnostic data to Linksys."
+  },
+  {
     "id": "wanstatus",
     "title": "Internet status",
     "group": "Network",
@@ -1609,6 +1680,56 @@
     "title": "Dynamic DNS status",
     "group": "Network",
     "read": "ddns/GetDDNSStatus2",
+    "write": "",
+    "fields": [],
+    "impact": "Changes apply to the selected router."
+  },
+  {
+    "id": "expressforwarding",
+    "title": "Express Forwarding",
+    "group": "Network",
+    "read": "router/GetExpressForwardingSettings",
+    "write": "router/SetExpressForwardingSettings",
+    "fields": [
+      {
+        "path": "isExpressForwardingEnabled",
+        "label": "Enable Express Forwarding (hardware acceleration)",
+        "type": "bool"
+      }
+    ],
+    "required": [
+      "isExpressForwardingEnabled"
+    ],
+    "routerOnly": true,
+    "impact": "Changes apply to the selected router. Traffic may pause briefly while forwarding restarts.",
+    "note": "Hardware-accelerated routing for higher internet throughput. Some traffic-shaping features are bypassed while it is on. If the firmware reports it as unsupported, this page cannot be saved."
+  },
+  {
+    "id": "iptv",
+    "title": "IPTV",
+    "group": "Network",
+    "read": "iptv/GetIPTVSettings",
+    "write": "iptv/SetIPTVSettings",
+    "fields": [
+      {
+        "path": "isEnabled",
+        "label": "Enable IPTV support",
+        "type": "bool"
+      }
+    ],
+    "required": [
+      "isEnabled"
+    ],
+    "routerOnly": true,
+    "disruption": true,
+    "impact": "Changes apply to the selected router. WARNING: when enabling IPTV on the default 192.168.1.x /24 LAN, the firmware moves the router to 192.168.10.1. Every device then needs a new address, and you must reconnect this app to the new address.",
+    "note": "For ISP television services that need multicast/IPTV pass-through."
+  },
+  {
+    "id": "routingtable",
+    "title": "Routing table",
+    "group": "Network",
+    "read": "router/GetStaticRoutingTable",
     "write": "",
     "fields": [],
     "impact": "Changes apply to the selected router."

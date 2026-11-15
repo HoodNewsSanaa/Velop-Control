@@ -13,6 +13,7 @@ public final class SettingsCatalog {
             "router/GetWANSettings",NeighborSignals.ACTION,"wirelessap/GetAdvancedRadioInfo","powertable/GetPowerTableSettings","diagnostics/GetPingStatus",Authentication.STATUS,Authentication.CHECK,"core/CheckAdminPassword");
         Collections.addAll(WRITES,"core/Reboot","core/SetAdminPassword2","core/SetAdminPassword3","devicelist/SetDeviceProperties",
             "diagnostics/StartPing","nodes/setup/StartAutoChannelSelection");
+        READS.addAll(NetworkTools.READS);WRITES.addAll(NetworkTools.WRITES);
     }
     public static synchronized void load(InputStream input) throws Exception {
         if(!ALL.isEmpty())return;
