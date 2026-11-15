@@ -600,7 +600,7 @@ public final class ControlActivity extends Activity {
     /** Polls stop while the app is in the background; pick up the active one again. */
     private void resumeToolPolls(){
         if(screenKey==null)return;
-        switch(screenKey){case "channels":if(channelScan)pollChannels();break;case "speed":if(speedRunning)pollSpeed();break;case "trace":if(traceRunning)pollTrace();break;case "wps":if(wpsActive)pollWps();break;default:}
+        switch(screenKey){case "channels":if(channelScan)pollChannels();break;case "speed":if(speedRunning)pollSpeed();break;case "trace":if(traceRunning)pollTrace();break;case "wps":if(wpsActive)pollWps();break;case "monitor":monitorScreen();break;default:}
     }
     private long since(long start){return (SystemClock.elapsedRealtime()-start)/1000;}
 
@@ -837,7 +837,8 @@ public final class ControlActivity extends Activity {
             ui.text(card,DropMonitor.time(e.start)+(e.end>e.start?" – "+DropMonitor.time(e.end)+" ("+DropMonitor.duration(e.seconds())+")":""),12,ui.muted);
             ui.text(card,e.kind,15,e.problem?ui.warning:ui.text);ui.text(card,e.detail,13,ui.text);page.addView(card);}
         if(report.samples>0){
-            ui.action(page,"Export log (CSV)",false,()->{try{export(new String(java.nio.file.Files.readAllBytes(log.toPath()),StandardCharsets.UTF_8)+"# "+DropMonitor.summary(report,MonitorService.INTERVAL_MS)+"\n","Velop-Connection-Monitor-"+new java.text.SimpleDateFormat("yyyyMMdd-HHmm",Locale.ROOT).format(new Date(samples.get(0).time))+".csv","text/csv");}catch(java.io.IOException e){message("Export failed","The log could not be read.");}});
+            ui.action(page,"Export log (CSV)",false,()->{try{String csv=new String(java.nio.file.Files.readAllBytes(log.toPath()),StandardCharsets.UTF_8);List<DropMonitor.Sample> all=new ArrayList<>();for(String line:csv.split("\n")){DropMonitor.Sample x=DropMonitor.parse(line);if(x!=null)all.add(x);}
+                export(csv+"# "+DropMonitor.summary(DropMonitor.analyse(all,MonitorService.INTERVAL_MS,this::nodeForBssid),MonitorService.INTERVAL_MS)+"\n","Velop-Connection-Monitor-"+new java.text.SimpleDateFormat("yyyyMMdd-HHmm",Locale.ROOT).format(new Date(samples.get(0).time))+".csv","text/csv");}catch(java.io.IOException e){message("Export failed","The log could not be read.");}});
             if(!MonitorService.running)ui.action(page,"Delete log",false,()->{if(log.delete())toast("Log deleted");monitorScreen();});
         }
     }
