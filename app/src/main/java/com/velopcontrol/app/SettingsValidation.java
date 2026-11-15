@@ -69,6 +69,8 @@ public final class SettingsValidation {
             if(!enabled)fail("Wi-Fi radios","keep at least one radio enabled in this build");
         }
         if(spec.id.equals("management")&&!payload.optBoolean("canManageUsingHTTPS"))fail("HTTPS","keep HTTPS enabled so this app can reconnect");
+        // The phone reaches every node over Wi-Fi; switching this off locks the app out of all nodes, in router and bridge mode alike.
+        if(spec.id.equals("management")&&Boolean.FALSE.equals(payload.opt("canManageWirelessly")))fail("Wireless management","keep it on: this app manages your nodes over Wi-Fi and would be locked out");
         if(spec.id.equals("lan")){
             int prefix=payload.optInt("networkPrefixLength",24);long mask=(0xffffffffL<<(32-prefix))&0xffffffffL;
             long router=ipv4(payload.optString("ipAddress")),network=router&mask,broadcast=network|(~mask&0xffffffffL);

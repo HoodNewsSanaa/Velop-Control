@@ -53,4 +53,14 @@ public class NetworkToolsTest {
         assertTrue(SettingsCatalog.find("iptv").impact.contains("192.168.10.1"));
         assertFalse("Destructive firmware actions stay blocked", SettingsCatalog.allowsWrite("core/FactoryReset") || SettingsCatalog.allowsWrite("diagnostics/RestorePreviousFirmware"));
     }
+    @Test public void managementPageCannotLockTheAppOutOfWifiManagement() throws Exception {
+        try (java.io.InputStream in = new java.io.FileInputStream("src/main/assets/settings.json")) { SettingsCatalog.load(in); }
+        SettingsCatalog.Spec spec = SettingsCatalog.find("management");
+        JSONObject ok = new JSONObject("{\"canManageUsingHTTP\":false,\"canManageUsingHTTPS\":true,\"canManageWirelessly\":true,\"canManageRemotely\":false}");
+        SettingsValidation.check(spec, ok, ok);
+        JSONObject off = new JSONObject(ok.toString()).put("canManageWirelessly", false);
+        try { SettingsValidation.check(spec, off, ok); fail(); } catch (IllegalArgumentException e) { assertTrue(e.getMessage().startsWith("Wireless management")); }
+        assertEquals("Settings are grouped for navigation", "Wi-Fi", SettingsCatalog.find("dfs").group);
+        assertEquals("Mesh", SettingsCatalog.find("onboarding").group);
+    }
 }

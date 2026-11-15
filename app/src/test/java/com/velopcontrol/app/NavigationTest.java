@@ -32,26 +32,28 @@ public class NavigationTest {
         Bitmap bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);view.draw(new Canvas(bitmap));File folder=new File("build/screenshots");folder.mkdirs();try(OutputStream output=new FileOutputStream(new File(folder,name+".png"))){assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG,100,output));}
     }
     @Test public void phoneNavigationSearchAndUnsupportedFeatureAreUsable() throws Exception {
-        screenshot("login-phone");click("Explore demo");assertNotNull(find(root(),"Mesh connections"));screenshot("overview-phone");
-        click("Nodes");assertNotNull(find(root(),"A · Primary"));screenshot("nodes-phone");
+        screenshot("login-phone");click("Explore demo");assertNotNull(find(root(),"All 5 nodes are online"));assertNotNull(find(root(),"Speed check"));screenshot("home-phone");
+        click("Mesh");assertNotNull(find(root(),"Mesh map"));assertNotNull(find(root(),"A · Primary"));screenshot("mesh-phone");
         click("Devices");assertNotNull(find(root(),"Pixel phone"));EditText query=(EditText)findHint(root(),"Search name, IP, MAC or access point");assertNotNull(query);query.setText("Pixel");assertNotNull(find(root(),"Pixel phone"));assertNull(find(root(),"Work laptop"));screenshot("devices-phone");
-        click("Settings");assertNotNull(find(root(),"Wi-Fi networks"));click("Open");assertNotNull(find(root(),"Wi-Fi name"));click("‹ Back");
-        click("Tools");assertNotNull(find(root(),"Run sequential validation"));click("Run sequential validation");AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();assertNotNull(dialog);assertTrue(dialog.isShowing());assertNotNull(find(dialog.getWindow().getDecorView(),"Connect to your mesh"));dialog.dismiss();screenshot("tools-phone");
+        click("Settings");assertNotNull(find(root(),"Management controls"));screenshot("settings-phone");click("Wi-Fi");assertNotNull(find(root(),"Wi-Fi networks"));screenshot("settings-wifi-phone");
+        click("Wi-Fi networks");assertNotNull(find(root(),"Wi-Fi name"));click("‹ Back");assertNotNull("Back returns to the group page",find(root(),"Guest Wi-Fi"));click("‹ Back");
+        click("Tools & diagnostics");assertNotNull(find(root(),"Run sequential validation"));click("Run sequential validation");AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();assertNotNull(dialog);assertTrue(dialog.isShowing());assertNotNull(find(dialog.getWindow().getDecorView(),"Connect to your mesh"));dialog.dismiss();screenshot("tools-phone");
     }
     @Test public void onboardingDemoShowsPreparationWithoutNetworkAccess() throws Exception {
-        click("Explore demo");click("Nodes");click("Add mesh nodes…");assertNotNull(find(root(),"Connect to your primary Velop to start setup. Demo sends no requests."));screenshot("onboarding-phone");
+        click("Explore demo");click("Mesh");click("Add mesh nodes");assertNotNull(find(root(),"Connect to your primary Velop to start setup. Demo sends no requests."));screenshot("onboarding-phone");
     }
     @Test public void onboardingOptionsUsePrimaryAndExposeInterruptedCleanup() throws Exception {
         click("Explore demo");Topology sample=Topology.demo();sample.demo=false;
         org.robolectric.util.ReflectionHelpers.setField(activity,"topology",sample);
         org.robolectric.util.ReflectionHelpers.setField(activity,"primary",new JnapClient("192.168.1.1",new char[]{'x'},new byte[32]));
-        click("Nodes");click("Add mesh nodes…");assertNotNull(find(root(),"Add a wireless node…"));assertNotNull(find(root(),"Add a wired node…"));screenshot("onboarding-ready-phone");
+        click("Mesh");click("Add mesh nodes");assertNotNull(find(root(),"Add a wireless node…"));assertNotNull(find(root(),"Add a wired node…"));screenshot("onboarding-ready-phone");
         activity.getSharedPreferences("preferences",0).edit().putString("onboardingPending:192.168.1.1","pending").commit();
         click("‹ Back");click("Open mesh setup");assertNotNull(find(root(),"End setup window / finish cleanup"));assertNull(find(root(),"Add a wireless node…"));screenshot("onboarding-interrupted-phone");
     }
     private View findHint(View view,String text){if(view instanceof EditText&&text.contentEquals(((EditText)view).getHint()))return view;if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){View found=findHint(group.getChildAt(i),text);if(found!=null)return found;}}return null;}
     @Test @Config(qualifiers="w900dp-h650dp-land-xhdpi") public void tabletNavigationAndAppearanceCanChange() throws Exception {
-        click("Explore demo");screenshot("overview-tablet");click("Tools");Switch appearance=(Switch)find(root(),"Dark appearance");assertNotNull(appearance);appearance.setChecked(false);assertFalse(activity.getSharedPreferences("preferences",0).getBoolean("dark",true));screenshot("tools-tablet-light");click("Settings");assertNotNull(find(root(),"Internet & bridge mode"));
+        click("Explore demo");screenshot("home-tablet");click("Mesh");screenshot("mesh-tablet");click("Settings");click("App preferences");Switch appearance=(Switch)find(root(),"Dark appearance");assertNotNull(appearance);appearance.setChecked(false);assertFalse(activity.getSharedPreferences("preferences",0).getBoolean("dark",true));
+        click("‹ Back");screenshot("settings-tablet-light");click("Internet");assertNotNull(find(root(),"Internet & bridge mode"));
     }
     @Test public void formPreservesRadioIdsAndCollectsNativePasswordEdits() throws Exception {
         JSONObject raw=new JSONObject("{\"radios\":[{\"radioID\":\"RADIO_5GHz\",\"supportedModes\":[\"Mixed\"],\"supportedSecurityTypes\":[\"WPA2-Personal\"],\"supportedChannelsForChannelWidths\":[{\"channelWidth\":\"Auto\",\"channels\":[0,36]}],\"settings\":{\"isEnabled\":true,\"ssid\":\"Home\",\"broadcastSSID\":true,\"mode\":\"Mixed\",\"channelWidth\":\"Auto\",\"channel\":0,\"security\":\"WPA2-Personal\",\"wpaPersonalSettings\":{\"passphrase\":\"old-password\"}}}]}" );
@@ -63,7 +65,7 @@ public class NavigationTest {
         assertNotNull(find(root(),"Connect once to your primary Velop. After that, the app finds it automatically, even if its address changes."));
     }
     @Test public void neighborSignalsExplainSteeringInDemo() throws Exception {
-        click("Explore demo");click("Nodes");click("Neighbor signals & steering…");
+        click("Explore demo");click("Mesh");click("Neighbor signals & steering");
         assertNotNull(find(root(),"Neighbor signals"));assertNotNull(find(root(),"Radio power & region"));
         assertTrue(findContaining(root(),"should move it there")!=null);screenshot("neighbor-signals-phone");
     }
@@ -72,17 +74,22 @@ public class NavigationTest {
         if(root instanceof ViewGroup){ViewGroup g=(ViewGroup)root;for(int i=0;i<g.getChildCount();i++){TextView f=findContaining(g.getChildAt(i),text);if(f!=null)return f;}}return null;
     }
     @Test public void channelFinderShowsDemoChanges() throws Exception {
-        click("Explore demo");click("Tools");click("Channel finder…");
+        click("Explore demo");click("Channel finder");
         assertNotNull(find(root(),"Channel finder"));assertNotNull(findContaining(root(),"was 100"));screenshot("channel-finder-phone");
-        click("‹ Back");click("Speed check…");assertNotNull(find(root(),"Speed check"));
+        click("‹ Back");assertNotNull("Back returns home",find(root(),"Drop monitor"));click("Speed check");assertNotNull(find(root(),"Speed check"));
     }
     @Test public void connectionMonitorScreenOffersTimedRuns() throws Exception {
-        click("Explore demo");click("Tools");click("Connection drop monitor…");
+        click("Explore demo");click("Drop monitor");
         assertNotNull(find(root(),"Connection monitor"));assertNotNull(find(root(),"Monitor for 1 hour"));assertNotNull(find(root(),"Monitor for 2 hours"));
         assertNotNull(find(root(),"Allow location for node tracking…"));screenshot("connection-monitor-phone");
     }
+    @Test public void settingsSearchFindsPagesAcrossGroups() throws Exception {
+        click("Explore demo");click("Settings");EditText search=(EditText)findHint(root(),"Search settings");assertNotNull(search);
+        search.setText("dfs");assertNotNull(find(root(),"DFS channels"));assertNull(find(root(),"Router settings"));
+        search.setText("zzzz");assertNotNull(findContaining(root(),"No settings match"));
+    }
     @Test public void restartWholeNetworkIsOfferedInTools(){
-        click("Explore demo");click("Tools");click("Restart whole network…");
+        click("Explore demo");click("Restart network");
         AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();assertNotNull(dialog);assertTrue(dialog.isShowing());
     }
 }
