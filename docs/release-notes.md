@@ -1,3 +1,10 @@
+Velop Control 0.8.1 — connection monitor fixes
+
+- The connection monitor screen refreshes again when you return to the app; previously it stayed frozen at the moment monitoring started.
+- Exported logs now end with a summary computed from the whole log at export time (0.8.0 could append a stale summary such as "2 checks").
+
+122 automated tests pass; Android lint reports 0 errors.
+
 Velop Control 0.8.0 — connection drop monitor
 
 - New **Tools → Connection drop monitor**: runs in the background for 1, 2 or 4 hours with a notification (Stop button) and stops by itself.
